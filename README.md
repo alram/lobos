@@ -102,7 +102,8 @@ sys	0m0.002s
 
 ## Performance
 
-This was tested on a frame.work desktop (AMD RYZEN AI MAX+ 395) with 32GB of RAM for the CPU. For small objects (32KiB) it looks like `warp` was taking as much if not more resources than lobos so a more performant machine can probably do more RPS.
+This was tested on a frame.work desktop (AMD RYZEN AI MAX+ 395) with 32GB of RAM for the CPU. The target directory was a dedicated XFS filesystem on a 500GB M.2 WD BLACK SN7100 NVMe.
+For small objects (32KiB) it looks like `warp` was taking as much if not more resources than lobos so a more performant machine can probably do more RPS.
 
 ### PUT 1 MiB and 50 concurrent ops (~1672MiB/s)
 ![](./pics/put_1MiB_50c.png)
