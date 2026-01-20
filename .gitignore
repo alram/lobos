@@ -1,5 +1,7 @@
 .vscode
 lobos
 *.o
+*.d
 boost_1_90_0
 boost_1_90_0.tar.bz2
+spdk

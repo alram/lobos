@@ -15,7 +15,7 @@
 
 namespace beast = boost::beast;
 namespace http  = beast::http;
-namespace net   = boost::asio;
+namespace asio   = boost::asio;
 namespace fs    = boost::filesystem;
 
 void pin_thread_to_core(int core_id) {
@@ -75,122 +75,6 @@ std::string S3HttpServer::to_rfc1123(time_t t) {
     return buf; 
 }
 
-std::string S3HttpServer::do_list_objects(std::string prefix) {
-    std::string data;
-    data.reserve(8192); //idk man 8k feels plenty provided we do the max-keys 1000 thing
-    data.append(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-        "<ListBucketResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
-        "<Name>" + bucket_name + "</Name>"
-        "<Prefix>" + prefix + "</Prefix>"
-        "<MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated>"
-    );
-    if(index_store_) {
-        std::unordered_set<std::string> seen;
-        std::string last_entry;
-
-        auto it = index_store_->index.lower_bound(prefix);
-        for (; it != index_store_->index.end(); ++it) {
-            if (it->first.compare(0, prefix.size(), prefix) != 0)
-                break;
-            std::string entry = it->first;
-        
-            // Prevent from listing recursively
-            size_t pos = entry.find(PATH_DELIM, prefix.size());
-            if (pos != std::string::npos) {
-                entry = it->first.substr(0, pos);
-                if(entry == last_entry) {
-                    continue;
-                }
-            }
-            last_entry = entry;
-            if (it->second.type == 'd') {
-                data.append(
-                    "<CommonPrefixes>"
-                    "<Prefix>" + entry + PATH_DELIM + "</Prefix>"
-                    "</CommonPrefixes>"
-                );
-            } else if (seen.insert(entry).second) {
-                data.append(
-                    "<Contents>"
-                    "<Key>" + entry + "</Key>"
-                    "<LastModified>" + std::to_string(it->second.last_modified) + "</LastModified>"
-                    "<Size>" + std::to_string(it->second.size) + "</Size>"
-                    "</Contents>"
-                );
-            }
-        }
-    } else {
-        // Check if prefix exists. If it doesn't, go one up in the dir hierarchy
-        // and list everything that _starts_ with prefix
-        fs::path path = prefix;
-        if (!fs::exists(path)) {
-            auto pos = path.string().find(PATH_DELIM);
-            if (pos == beast::string_view::npos) {
-                path.clear();
-            }
-            else {
-                path = prefix.substr(0, pos);
-                prefix = prefix.substr(pos+1);
-            }
-        } else {
-            prefix.clear();
-        }
-
-        if (path.empty())
-            path = fs::current_path();
-
-        for (auto& entry : boost::make_iterator_range(fs::directory_iterator(path), {})) {
-            if (!prefix.empty()) {
-                auto s = path.string() + '/' + prefix;
-                if (!entry.path().string().starts_with(s)) {
-                    continue;
-                }
-            }
-            if (fs::is_directory(entry.path())) {
-                data.append(
-                    "<CommonPrefixes>"
-                    "<Prefix>" + entry.path().filename().string() + PATH_DELIM + "</Prefix>"
-                    "</CommonPrefixes>"
-                );
-            } else {
-                data.append(
-                    "<Contents>"
-                    "<Key>" + entry.path().filename().string() + "</Key>"
-                    "<LastModified>" + std::to_string(fs::last_write_time(entry)) + "</LastModified>"
-                    "<Size>" + std::to_string(fs::file_size(entry.path())) + "</Size>"
-                    "</Contents>"
-            );
-            }
-        }
-    }
-    return data.append("<Marker></Marker></ListBucketResult>");
-}
-
-auto S3HttpServer::do_metadata_req(boost::string_view path) {
-    size_t size;
-    time_t last_modified;
-
-    if (index_store_) {
-        auto it = index_store_->index.find(path);
-        if (it == index_store_->index.end()) {
-            size = last_modified = 0;
-        } else {
-            size = it->second.size;
-            last_modified = it->second.last_modified;
-        }
-    } else {
-        try {
-            size = fs::file_size(path);
-            last_modified = fs::last_write_time(path);
-        } catch (const fs::filesystem_error& e) {
-            size = last_modified = 0;
-        }
-    }
-
-    return std::tuple{size, last_modified};
-}
-
 bool S3HttpServer::parse_aws_params(std::string_view t, std::unordered_map<std::string, std::string>& aws_params) {
       
     auto target = boost::urls::parse_relative_ref(t);
@@ -218,32 +102,8 @@ void S3HttpServer::sanitize_target_path(std::string& target) {
         target.erase(0, 1);
 }
 
-std::string S3HttpServer::create_dest_dirs_if_not_exist(std::string object) {
-    sanitize_target_path(object);
-
-    bool path_exist = true;
-    //We need to ensure all the parents directories exist before anything
-    auto pos = object.rfind(PATH_DELIM);
-    if (pos != beast::string_view::npos) {
-        auto path = object.substr(0, pos);
-        if (index_store_) {
-            auto it = index_store_->index.find(path);
-            if (it == index_store_->index.end())
-                path_exist = false;
-        } else if (!fs::exists(path)) {
-            path_exist = false;
-        }
-        if (!path_exist) {
-            fs::create_directories(path);
-            //TODO missing index add;
-        }
-    } // else this is just `/key` so we don't care? I think?
-
-    return object;
-}
-
 // TODO this isn't used
-http::message_generator S3HttpServer::not_found_bucket_res(beast::string_view bucket, http::request<http::file_body>&& req) {
+http::message_generator S3HttpServer::not_found_bucket_res(beast::string_view bucket, http::request<http::buffer_body>&& req) {
     http::response<http::string_body> res{http::status::not_found, req.version()};
     res.set(http::field::server, SERVER_NAME);
     res.set(http::field::content_type, "application/xml");
@@ -257,7 +117,7 @@ http::message_generator S3HttpServer::not_found_bucket_res(beast::string_view bu
     return res;
 }
 
-http::message_generator S3HttpServer::not_found_key_res(beast::string_view target, http::request<http::file_body>&& req) {
+http::message_generator S3HttpServer::not_found_key_res(beast::string_view target, http::request<http::buffer_body>&& req) {
     http::response<http::string_body> res{http::status::not_found, req.version()};
     res.set(http::field::server, SERVER_NAME);
     res.set(http::field::content_type, "application/xml");
@@ -271,12 +131,12 @@ http::message_generator S3HttpServer::not_found_key_res(beast::string_view targe
     return res;
 }
 
-http::message_generator S3HttpServer::handle_head_object(beast::string_view object, http::request<http::file_body>&& req) {
+asio::awaitable<http::message_generator> S3HttpServer::handle_head_object(beast::string_view object, http::request<http::buffer_body>&& req) {
 
-    auto [size, last_modified] = do_metadata_req(object);
+    auto [size, last_modified] = co_await store_->do_metadata_req(object);
 
     if (last_modified == 0 && size == 0)
-        return not_found_key_res(object, std::move(req));
+        co_return not_found_key_res(object, std::move(req));
 
     http::response<http::string_body> res{http::status::ok, req.version()};
     res.set(http::field::server, SERVER_NAME);
@@ -285,49 +145,61 @@ http::message_generator S3HttpServer::handle_head_object(beast::string_view obje
     res.set(http::field::last_modified, sv);
     res.content_length(size);
     res.keep_alive(req.keep_alive());
-    return res;
+    co_return res;
 }
 
-http::message_generator S3HttpServer::handle_list_objects(beast::string_view prefix, http::request<http::file_body>&& req) {
-        http::response<http::string_body> res{http::status::ok, req.version()};
-        res.set(http::field::server, SERVER_NAME);
-        res.set(http::field::content_type, "application/xml");
-        res.keep_alive(req.keep_alive());
-        auto objects =  do_list_objects(prefix);
-        res.body() = objects;
-        res.prepare_payload();
-        return res;
+asio::awaitable<http::message_generator> S3HttpServer::handle_list_objects(beast::string_view prefix, http::request<http::buffer_body>&& req, std::shared_ptr<std::vector<uint8_t>> session_buffer) {
+    session_buffer->clear();
+    std::string h = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<ListBucketResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+        "<Name>" + bucket_name + "</Name>"
+        "<Prefix>" + std::string(prefix) + "</Prefix>"
+        "<MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated>";
+    session_buffer->insert(session_buffer->end(), h.begin(), h.end());
+    co_await store_->do_list(prefix, *session_buffer);
+    std::string f = "<Marker></Marker></ListBucketResult>";
+    session_buffer->insert(session_buffer->end(), f.begin(), f.end());
+    
+    http::response<http::buffer_body> res{http::status::ok, req.version()};
+    res.set(http::field::server, SERVER_NAME);
+    res.set(http::field::content_type, "application/xml");
+    
+    res.body().data = session_buffer->data();
+    res.body().size = session_buffer->size();
+    res.body().more = false;
+
+    res.prepare_payload();
+    co_return res;
 }
 
-http::message_generator S3HttpServer::handle_get_object(beast::string_view object, http::request<http::file_body>&& req) {
-        
-    auto [_, last_modified] = do_metadata_req(object);
-
+// TODO - get/put should handle chunks for large IO however this will require
+// a lot of changes so for now we dont
+asio::awaitable<http::message_generator> S3HttpServer::handle_get_object(beast::string_view object, http::request<http::buffer_body>&& req, std::shared_ptr<std::vector<uint8_t>> session_buffer) {
+    auto [size, last_modified] = co_await store_->do_metadata_req(object);
+    
     if (last_modified == 0)
-        return not_found_key_res(object, std::move(req));        
-        
-    http::response<http::file_body> res{http::status::ok, req.version()};
+        co_return not_found_key_res(object, std::move(req));
+    
+    session_buffer->resize(size);
+    //todo check return
+    co_await store_->do_read(object, 0, *session_buffer);
+
+    http::response<http::buffer_body> res{http::status::ok, req.version()};
     res.set(http::field::server, SERVER_NAME);
     res.set(http::field::content_type, mime_type(object));
     res.set(http::field::last_modified, to_rfc1123(last_modified));
 
-    beast::error_code ec;
-    http::file_body::value_type body;
+    res.body().data = session_buffer->data();
+    res.body().size = session_buffer->size();
+    res.body().more = false;
 
-    body.open(std::string(object).c_str(), beast::file_mode::scan, ec);
-    if (ec) {
-        return not_found_key_res(object, std::move(req));
-    }
-
-    res.content_length(body.size());
-    res.body() = std::move(body);
-    res.keep_alive(req.keep_alive());
     res.prepare_payload();
 
-    return res;
+    co_return res;
 }
 
-http::message_generator S3HttpServer::handle_request(http::request<http::file_body>&& req) {
+asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::request<http::buffer_body>&& req, 
+    std::shared_ptr<std::vector<uint8_t>> session_buffer) {
     // Returns a bad request response
     auto const bad_request_res =
     [&req](beast::string_view why)
@@ -387,14 +259,14 @@ http::message_generator S3HttpServer::handle_request(http::request<http::file_bo
     //Store aws' s3 url req params
     std::unordered_map<std::string, std::string> aws_params;
     if (!parse_aws_params(req.target(), aws_params)) {
-        return bad_request_res("Malformed request");
+        co_return bad_request_res("Malformed request");
     }
 
     // Ensure only / is used as a delimiter 
     auto it = aws_params.find("delimiter");
     if (it != aws_params.end()) {
         if (!it->second.empty() && it->second != std::string(1, PATH_DELIM)) {
-            return bad_request_res("/ is the only supported delimiter.");
+            co_return bad_request_res("/ is the only supported delimiter.");
         }
     }
 
@@ -408,30 +280,20 @@ http::message_generator S3HttpServer::handle_request(http::request<http::file_bo
             res.set(http::field::server, SERVER_NAME);
             res.insert("x-amz-bucket-region", "lobos");
             res.keep_alive(req.keep_alive());
-            return res;
+            co_return res;
         }
-        return handle_head_object(target, std::move(req));
+        co_return co_await handle_head_object(target, std::move(req));
     }
 
     if (req.method() == http::verb::put) {
-        const auto size = fs::file_size(target);
-        if (index_store_) {
-            std::time_t now = std::time(nullptr);
-
-            Object o = {
-                size,
-                now,
-                'f',
-            };
-            index_store_->add_entry(target, o);
-        }
-
+        co_await store_->do_write(target, *session_buffer);
         http::response<http::string_body> res{http::status::ok, req.version()};
         res.set(http::field::server, SERVER_NAME);
-        res.insert("x-amz-object-size", std::to_string(size));
-        res.content_length(0);
+        res.insert("x-amz-object-size", std::to_string(req.body().size));
         res.keep_alive(req.keep_alive());
-        return res;
+        res.prepare_payload();
+
+        co_return res;
     }    
 
     // Now the big one, GET. It gets f'ed up and we use params to target between
@@ -442,91 +304,88 @@ http::message_generator S3HttpServer::handle_request(http::request<http::file_bo
         // this is naive and will not work with listobjectv1
         if (target.empty()) {
             if (aws_params.contains("list-type"))
-                return handle_list_objects(aws_params["prefix"], std::move(req));
+                co_return co_await handle_list_objects(aws_params["prefix"], std::move(req), session_buffer);
             if (aws_params.contains("versioning") || 
                 aws_params.contains("object-lock") || 
                 aws_params.contains("max-buckets") ||
                 aws_params.empty())
-                return bucket_ops_res(aws_params);
+                co_return bucket_ops_res(aws_params);
         } else {
             // This is a get object probably?
-            return handle_get_object(target, std::move(req));
+            co_return co_await handle_get_object(target, std::move(req), session_buffer);
         }
     }
 
     if (req.method() == http::verb::delete_) {
-        auto deleted = fs::remove(target);
+        auto deleted = co_await store_->do_delete(target);
         if (!deleted)
-            return not_found_key_res(target, std::move(req));
-        if (index_store_)
-            index_store_->index.erase(target);
+            co_return not_found_key_res(target, std::move(req));
 
-        return delete_object_res();
+        co_return delete_object_res();
     }
 
     std::cout << "unsupported req: " << req.method() << " " << req.target() << std::endl;
-    return bad_request_res("unsupported req");
+    co_return bad_request_res("unsupported req");
 }
 
 // Handles an HTTP server connection
-net::awaitable<void> S3HttpServer::do_session(beast::tcp_stream stream) {
+asio::awaitable<void> S3HttpServer::do_session(beast::tcp_stream stream) {
     beast::flat_buffer buffer;
-
+    //TODO: might want to use a bufferpool 
+    // https://claude.ai/chat/2e353513-17f0-4f0a-83e2-410cdabe1935
+    auto session_buffer = std::make_shared<std::vector<uint8_t>>();
     for(;;)
     {
         // Set timeout
         stream.expires_after(std::chrono::seconds(30));
 
-        http::request_parser<http::file_body> parser;
+        http::request_parser<http::buffer_body> parser;
         parser.body_limit(MAX_OBJ_SIZE);
 
         // Parse headers first for PUT reqs
-        co_await http::async_read_header(stream, buffer, parser);
-
+        co_await http::async_read_header(stream, buffer, parser, asio::use_awaitable);
         if (parser.get().method() == http::verb::put) {
-            std::string target = std::string(parser.get().target());
-            auto object = create_dest_dirs_if_not_exist(target);
-            beast::error_code ec;
-            // TODO here we wanna handle checksum that some clients provide
-            // it's stored in the body 
-            parser.get().body().open(object.c_str(), beast::file_mode::write, ec);
-            if (ec) {
-                //TODO
-            }
+            std::string target = parser.get().target();
+            sanitize_target_path(target);
+            auto content_length = parser.content_length().value_or(0);
+            session_buffer->resize(content_length);
+
+            parser.get().body().data = session_buffer->data();
+            parser.get().body().size = session_buffer->size();
         }
 
-        co_await http::async_read(stream, buffer, parser);
-        
+        co_await http::async_read(stream, buffer, parser, asio::use_awaitable);
         auto req = parser.release();
-        http::message_generator msg = handle_request(std::move(req));
+    
+        auto msg = co_await handle_request(std::move(req), session_buffer);
 
         bool keep_alive = msg.keep_alive();
-        co_await beast::async_write(stream, std::move(msg));
+        co_await beast::async_write(stream, std::move(msg), asio::use_awaitable);
 
         if (!keep_alive)
             break;
     }
 
     // Send a TCP shutdown
-    stream.socket().shutdown(net::ip::tcp::socket::shutdown_send);
+    stream.socket().shutdown(asio::ip::tcp::socket::shutdown_send);
 }
 
-net::awaitable<void> S3HttpServer::do_listen(net::ip::tcp::endpoint ep) {
-    auto executor = co_await net::this_coro::executor;
-    net::ip::tcp::acceptor acceptor{executor};
+asio::awaitable<void> S3HttpServer::do_listen(asio::ip::tcp::endpoint ep) {
+    auto executor = co_await asio::this_coro::executor;
+    asio::ip::tcp::acceptor acceptor{executor};
 
     acceptor.open(ep.protocol());
-    acceptor.set_option(net::socket_base::reuse_address(true));
+    acceptor.set_option(asio::socket_base::reuse_address(true));
 #ifdef SO_REUSEPORT
-    acceptor.set_option(net::detail::socket_option::boolean<SOL_SOCKET, SO_REUSEPORT>(true));
+    acceptor.set_option(asio::detail::socket_option::boolean<SOL_SOCKET, SO_REUSEPORT>(true));
 #endif
     acceptor.bind(ep);
-    acceptor.listen(net::socket_base::max_listen_connections);
+    acceptor.listen(asio::socket_base::max_listen_connections);
 
     for (;;) {
-        net::ip::tcp::socket socket = co_await acceptor.async_accept(net::use_awaitable);
+        asio::ip::tcp::socket socket = co_await acceptor.async_accept(asio::use_awaitable);
         // no_delay improved throughput by almost 4x on loopback during my benchmarks
-        socket.set_option(net::ip::tcp::no_delay(true));
+        socket.set_option(asio::ip::tcp::no_delay(true));
 
         auto on_session_except = [](std::exception_ptr e) {
             if (e) {
@@ -538,21 +397,21 @@ net::awaitable<void> S3HttpServer::do_listen(net::ip::tcp::endpoint ep) {
             }
         };
 
-        net::co_spawn(
+        asio::co_spawn(
             executor,
             do_session(beast::tcp_stream{std::move(socket)}), 
             on_session_except);
     }
 }
 
-void S3HttpServer::start(int threads, bool pin) {
+void S3HttpServer::start(int threads, std::vector<int> pins) {
     std::cout << "Starting S3 HTTP server for bucket " << bucket_name << " at " << endpoint << std::endl;
     
-    std::vector<std::unique_ptr<net::io_context>> ioctxs;
+    std::vector<std::unique_ptr<asio::io_context>> ioctxs;
     ioctxs.reserve(threads);
 
     for (int i = 0; i < threads; ++i)
-        ioctxs.emplace_back(std::make_unique<net::io_context>(1));
+        ioctxs.emplace_back(std::make_unique<asio::io_context>(1));
 
     std::vector<std::thread> thread_pool;
     thread_pool.reserve(threads);
@@ -560,10 +419,10 @@ void S3HttpServer::start(int threads, bool pin) {
     for (int i = 0; i < threads; i++) {
         thread_pool.emplace_back([&, i]{
 
-            if (pin)
-                pin_thread_to_core(i);
+            if (pins.size() > 0)
+                pin_thread_to_core(pins[i]);
 
-            net::co_spawn(
+            asio::co_spawn(
                 *ioctxs[i],
                 do_listen(endpoint),
                 [](std::exception_ptr e) {

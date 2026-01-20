@@ -4,50 +4,18 @@
 #include <cstdlib>
 #include <iostream>
 #include <cerrno>
+#include <fstream>
+
+#include <boost/program_options.hpp>
 
 #include "s3http/server.hpp"
+#include "store/store.hpp"
+#include "store/fs_store.hpp"
+#include "store/spdk_store.hpp"
 
-struct Config {
-    bool lobos_index_enabled = false;
-    int  lobos_index_refresh_sec = 0;
-    std::string lobos_dir;
-    int port = 8080;
-    int threads = 8;
-    bool pin_threads = false;
-};
-
-void print_help_and_exit() {
-    std::cout <<
-        "Usage:\n"
-        "  lobos [options]\n\n"
-        "Options:\n"
-        "  -h, --help\n"
-        "      Show this help and exit\n"
-        "  -d, --dir\n"
-        "      Directory for lobos to transform into a S3 bucket\n"
-        "  -p, --port\n"
-        "      Port to the HTTP server should listen on (default 8080)\n"
-        "  -t, --threads\n"
-        "      Number of threads to use. Too many threads will have a\n"
-        "      detrimental impact on perf. (default: 8)\n"
-        "  -c, --pin-threads-to-cpus\n"
-        "      Pin threads to CPU. Thread 0 will be pinned to CPU#0, etc. (Default: false)\n"
-        "  -e, --enable-lobos-index\n"
-        "      (In development) Enable Lobos index\n"
-        "  -r, --lobos-index-refresh-sec <sec>\n"
-        "      (Not implemented) Refresh interval in seconds\n"
-        "      This will re-sync the index while lobos is running to keep\n"
-        "      up with any changes made by other applications\n";
-    std::exit(0);
-}
+namespace po = boost::program_options;
 
 void validate_lobos_dir(std::string& dir) {
-
-    if (dir.empty()) {
-        std::cerr << "Error: must specify --dir/-d" << std::endl;
-        std::exit(EINVAL);
-    }
-
     std::filesystem::path p = dir;
     std::error_code ec;
 
@@ -73,80 +41,150 @@ void validate_lobos_dir(std::string& dir) {
         dir.push_back('/');
 }
 
-Config parse_args(int argc, char** argv) {
-    Config cfg;
-
-    static option long_opts[] = {
-        {"help",                    no_argument,       nullptr, 'h'},
-        {"dir",                     required_argument, nullptr, 'd'},
-        {"port",                    required_argument, nullptr, 'p'},
-        {"enable-lobos-index",      no_argument,       nullptr, 'e'},
-        {"lobos-index-refresh-sec", required_argument, nullptr, 'r'},
-        {"threads",                 required_argument, nullptr, 't'},
-        {"pin-threads-to-cpus",     no_argument,       nullptr, 'c'},
-        {nullptr, 0, nullptr, 0}
-    };
-
-    int opt;
-    while ((opt = getopt_long(argc, argv, "hd:p:er:t:c", long_opts, nullptr)) != -1) {
-        switch (opt) {
-            case 'h':
-                print_help_and_exit();
-                break;
-            case 'd':
-                cfg.lobos_dir = std::string(optarg);
-                break;
-            case 'p':
-                cfg.port = std::atoi(optarg);
-                break;
-            case 'e':
-                cfg.lobos_index_enabled = true;
-                break;
-            case 'r':
-                cfg.lobos_index_refresh_sec = std::atoi(optarg);
-                break;
-            case 't':
-                cfg.threads = std::atoi(optarg);
-                break;
-            case 'c':
-                cfg.pin_threads = true;
-                break;
-            default:
-                print_help_and_exit();
-        }
+// string could be one of:
+// int
+// int,int
+// int-int
+// this is very naive and will break
+std::vector<int> parse_threads_input(std::string i) {
+    std::vector<int> pins{};
+    if (i.empty()) {
+        return pins;
     }
-    validate_lobos_dir(cfg.lobos_dir);
 
-    return cfg;
+    while (auto pos = i.find(',') != std::string::npos) {
+        int v = stoi(i.substr(0, pos));
+        i.erase(0, pos);
+        if (i[0] == ',') i.erase(0,1);
+        pins.push_back(v);
+    }
+
+    auto pos = i.find('-');
+    if (pos != std::string::npos) {
+        int v_start = stoi(i.substr(0, pos));
+        i.erase(0, pos+1);
+        int v_end = stoi(i);
+        for (; v_start <= v_end; v_start++) {
+            pins.push_back(v_start);
+        }
+    } else {
+        pins.push_back(stoi(i));
+    }
+    return pins;
 }
 
 int main(int argc, char **argv) {
 
-    Config cfg = parse_args(argc, argv);
+    po::options_description cmdline_options("Command Line Options");
+    cmdline_options.add_options()
+        ("help,h", "Show help message")
+        ("config,c", po::value<std::string>(), "Path to Lobos config file");
 
-    std::cout << "====== OPTIONS ======== " << std::endl;
-    std::cout << "port=" << cfg.port << std::endl;
-    std::cout << "lobos_dir=" << cfg.lobos_dir << std::endl;
-    std::cout << "lobos_index_enabled=" << cfg.lobos_index_enabled << std::endl;
-    std::cout << "lobos_index_refresh_sec=" << cfg.lobos_index_refresh_sec << std::endl;
-    std::cout << "beast threads=" << cfg.threads << std::endl;
-    std::cout << "thread pinning=" << cfg.pin_threads << std::endl;
-    std::cout << "======================= " << std::endl;
+    po::options_description config_options("Configuration");
+        config_options.add_options()
+            ("entry.backend", po::value<std::string>()->required())
+            ("entry.port", po::value<int>()->default_value(8080))
+            ("entry.http_threads", po::value<int>()->default_value(8))
+            ("entry.http_threads_cores", po::value<std::string>()->default_value(""))
+            ("filesystem.directory", po::value<std::string>()->default_value(""))
+            ("spdk_blobstore.device", po::value<std::string>()->default_value(""))
+            ("spdk_blobstore.cluster_sz", po::value<uint32_t>()->default_value(131072))
+            ("spdk_blobstore.log_level", po::value<std::string>()->default_value(""))
+            ("spdk_blobstore.reactor_core", po::value<int>()->default_value(8))
+            ("spdk_blobstore.interupt_mode", po::value<bool>()->default_value(false));
+    
+    po::variables_map vm;
 
-    // Change CWD to lobos_dir
-    std::filesystem::current_path(cfg.lobos_dir);
+    po::store(po::parse_command_line(argc, argv, cmdline_options), vm);
 
-    std::unique_ptr<IndexStore> index_store;
-    if(cfg.lobos_index_enabled) {
-        auto start = std::chrono::steady_clock::now();
-        std::cout << "Recursively building index from " << cfg.lobos_dir << " down... This can take a while" << std::endl;
-        index_store = std::make_unique<IndexStore>(cfg.lobos_index_refresh_sec, cfg.lobos_dir);
-        auto end = std::chrono::steady_clock::now();
-        std::chrono::duration<double> elapsed_seconds = end - start;
-        std::cout << "Index built in " << elapsed_seconds.count() << " seconds with " << index_store->index.size() << " items" << std::endl;
+    if(vm.count("help")) {
+        std::cout << cmdline_options << std::endl;
+    }
+    if (!vm.count("config")) {
+        std::cerr << "Error --config is required" << std::endl;
+        std::cout << cmdline_options << std::endl;
+        return 1;
     }
 
-    S3HttpServer server("127.0.0.1", cfg.port, cfg.lobos_dir, index_store.get());
-    server.start(cfg.threads, cfg.pin_threads);
+    std::string config_path = vm["config"].as<std::string>();
+    std::ifstream config_file(config_path);
+    if (!config_file) {
+        std::cerr << "Error: Cannot open config file: " << config_path << "\n";
+        return 1;
+    }
+
+    try {
+        po::store(po::parse_config_file(config_file, config_options, true), vm);
+        po::notify(vm);
+    } catch (const po::required_option& e) {
+        std::cerr << "Error: Missing required option: " << e.what() << std::endl;
+        return 1;
+    } catch (const po::error& e) {
+        std::cerr << "Error in configuration parsing: " << e.what() << std::endl;
+        return 1;
+    }
+
+
+    std::unique_ptr<Store> store;
+    std::unique_ptr<SpdkReactor> spdk_reactor;
+    std::string bucket = "";
+
+    std::string backend = vm["entry.backend"].as<std::string>();
+    if (backend == "spdk_blobstore") {
+        bucket = "lobos";
+        SpdkReactorConf conf = {
+            vm["spdk_blobstore.log_level"].as<std::string>(),
+            vm["spdk_blobstore.interupt_mode"].as<bool>(),
+            vm["spdk_blobstore.reactor_core"].as<int>(),
+        };
+        spdk_reactor = std::make_unique<SpdkReactor>(conf);
+
+        SpdkConfig spdk_conf = {
+            vm["spdk_blobstore.cluster_sz"].as<uint32_t>(),
+        };
+        store = std::make_unique<SpdkStore>(spdk_reactor.get(), spdk_conf);
+        store->init_store(vm["spdk_blobstore.device"].as<std::string>());
+
+        //TODO remove this;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    } else if (backend == "filesystem") {
+        std::cout << "starting in fs mode" << std::endl;
+        bucket = vm["filesystem.directory"].as<std::string>();
+        validate_lobos_dir(bucket);
+        // Change CWD to lobos_dir
+        std::filesystem::current_path(bucket);
+        // We're in FS mode
+        store = std::make_unique<FsStore>();
+    } else {
+        std::cerr << "Error unsupported backend " << backend << std::endl;
+        return 1;
+    }
+
+    S3HttpServer server("127.0.0.1", 
+            vm["entry.port"].as<int>(), 
+            bucket, 
+            store.get());
+
+    int http_threads = vm["entry.http_threads"].as<int>();
+    std::string pins_s = vm["entry.http_threads_cores"].as<std::string>();
+    std::vector<int> pins{};
+    if (!pins_s.empty()) {
+        pins = parse_threads_input(vm["entry.http_threads_cores"].as<std::string>());
+        if (http_threads != pins.size()) {
+            std::cerr << "Error http_threads and http_threads_cores need to match core count" << std::endl;
+            return 1;
+        }
+    }
+
+    server.start(http_threads, pins);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    store->shutdown_store();
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    spdk_reactor->stop();
+    spdk_reactor->join();
+
+    return 0;
 }
 

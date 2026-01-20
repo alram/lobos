@@ -1,66 +1,90 @@
 # LOBOS
 
-**NOTE** This is a learning experiment to get familiar with C++ with no certain future maintenance or improvements.
+**NOTE** This is a learning experiment to get familiar with C++ with no certain future maintenance or improvements. It's currently under active development.
 
-Lobos (local objectstore) allows a user to transform any directory in their filesystem into an S3 bucket. Because the user themselves are enabling Lobos on their directory, we bind to `127.0.0.1` only and there's no S3 auth.
+Lobos (local objectstore) allows a user to quickly deploy a local (bind to `127.0.0.1` only). Lobos supports 2 backends, a filesystem and SPDK's blobstore.
+ - Filesystem: When in filesystem mode, Lobos will translate S3 calls into filesystems'. The directory Lobos is pointed out will become the bucket name. For instance, if you point Lobos at `/mnt/disk0` your bucket name will be `disk0`.
+ - Using SPDK's blobstore, Lobos bucket name will always `lobos`. See the SPDK documentation below for configuration information.
 
 The parsing is pretty naive so things can get broken quick but the following seem to work with `aws s3` cli:
  - ListBuckets
  - HeadBucket
  - ListObjectsV2 (no max-keys, always recursive)
  - HeadObject
- - GetObject
+ - GetObject (no range)
  - PutObject
  - DeleteObject
 
- Benchmark tools `elbencho` and `warp` work as well.
+ Benchmark tools `elbencho` and `warp` work as well (but checksums aren't supported)
 
-## Reqs
+ SPDK support is still very experimental and while the whole project has a lot of shortcuts that needs to addressed, SPDK has a lot more (buffers, index, shutdown, etc.). Working on this at the moment.
 
-You need boost 1.90 with the filesystem library compiled (`./b2 --with-filesystem`)
+## Building
+
+There's some work needed to make it easier to build... but for now:
+
+```bash
+$ git clone https://github.com/alram/lobos.git
+$ cd lobos/src/
+# Build Boost
+$ wget https://archives.boost.io/release/1.90.0/source/boost_1_90_0.tar.bz2
+$ tar -xf boost_1_90_0.tar.bz2
+$ cd boost_1_90_0/
+$ ./boostrap.sh
+$ ./b2 --with-filesystem --with-url --with-program_options
+# Build SPDK
+$ cd <lobos_dir>/src
+$ git clone https://github.com/spdk/spdk --recursive
+# Follow the steps documented here: https://spdk.io/doc/getting_started.html
+$ cd <lobos_dir>
+$ make
+$ ./lobos 
+Error --config is required
+Command Line Options:
+  -h [ --help ]         Show help message
+  -c [ --config ] arg   Path to Lobos config file
+```
 
 ## Usage
 
-```bash
-$ ./lobos --help
-Usage:
-  lobos [options]
+Lobos require a configuration file. That looks like:
+```ini
+[entry]
+backend=spdk_blobstore          # other accepted: filesystem
+# backend=filesystem
+port=8080                       # port lobos listens on
+http_threads = 8                # numbers of beast threasd
+# Pin beast threads to CPU cores:
+# leave empty to disable
+# n-m for a range
+# n,m,o to specify cores
+http_threads_cores = 1-8
 
-Options:
-  -h, --help
-      Show this help and exit
-  -d, --dir
-      Directory for lobos to transform into a S3 bucket
-  -p, --port
-      Port to the HTTP server should listen on (default 8080)
-  -t, --threads
-      Number of threads to use. Too many threads will have a
-      detrimental impact on perf. (default: 8)
-  -c, --pin-threads-to-cpus
-      Pin threads to CPUs. Thread 0 will be pinned to CPU#0, etc. (Default: false)
-  -e, --enable-lobos-index
-      (In development) Enable Lobos index
-  -r, --lobos-index-refresh-sec <sec>
-      (Not implemented) Refresh interval in seconds
-      This will re-sync the index while lobos is running to keep
-      up with any changes made by other applications
+[filesystem]
+directory=/mnt/lobos                  # if in filesystem mode, this will use this option as CWD
+
+[spdk_blobstore]
+# As to be a pciaddr or "malloc" for testing
+# with malloc a 16MiB malloc bdev will be created
+device=0000:c1:00.0
+# device = malloc 
+cluster_sz = 131072             # (Not impl)
+log_level = debug               # debug/none supported only currently
+reactor_core = 0                # (Not impl) SPDK pins its thread to a CPU core
+# SPDK polls by defaut, it can be switched to interupt
+# mode, it's particularly to avoid spinning the CPU 
+# during dev/testing. For max performance do not set.
+# interupt_mode=true
 ```
+Pinning and threads configuration is not required but recommended if you want the highest performance (and avoid SMT cores if possible)
 
-By default, Lobos will use the local filesystem for operations such as `s3:ListObjects` to speed things up, Lobos implements a very simple in-memory index when using the `--enable-lobos-index` option. It is pretty inefficient and is in development. When using lobos' index, the `--lobos-index-refresh-sec` option (default 0: disabled) will be available to re-sync the index with any changes to the directory that were done outside of Lobos. The hope is that this will allow much faster ObjectList operations.
-
-Launching Lobos:
+### Launching in filesystem:
 
 ```bash
-$ LD_LIBRARY_PATH=~/code/lobos/src/boost_1_90_0/stage/lib  ./lobos --dir /home/alram/code/lobos -t 16 -c
-====== OPTIONS ======== 
-port=8080
-lobos_dir=/mnt/bench/
-lobos_index_enabled=0
-lobos_index_refresh_sec=0
-beast threads=16
-thread pinning=1
-======================= 
-Starting S3 HTTP server for bucket lobos at 127.0.0.1:8080
+$ mkdir /mnt/demo
+$ ./lobos -c lobos.cfg 
+starting in fs mode
+Starting S3 HTTP server for bucket demo at 127.0.0.1:8080
 ```
 
 Using the `aws` cli:
@@ -100,22 +124,78 @@ user	0m0.004s
 sys	0m0.002s
 ```
 
+### Launching in SPDK mode
+
+*NOTE* If launching Lobos with SPDK make sure huge pages are configured, more info https://spdk.io/doc/getting_started.html
+
+While Lobos supports malloc bdev, it's mostly for testing, you'll want a dedicated NVMe to use SPDK blobstore.
+
+Running:
+```bash
+$ sudo ./src/spdk/scripts/setup.sh
+```
+Should automatically passthrough any non-used NVMe. You can use the env vars `PCI_ALLOWED` or `PCI_BLOCKED` to explicitely allow or block vfio passthrough on devices.
+If your NVMe isn't automatically added even with `PCI_ALLOWED` it's most likely because it was used before and need to be formatted. You can run:
+```bash
+sudo nvme format --ses=1 /dev/disk/by-id/<controller_nsid> --force
+```
+I highly recommend always using `by-id` instead of the device in the kernel (e.g. `nvme0n1`) since by doing passthrough, those can change (I learned that the hard way, erasign my whole OS disk)
+
+Running
+```bash
+alram@aidumdum:~/code/lobos$ sudo ./src/spdk/scripts/setup.sh status
+0000:c2:00.0 (144d a808): Active devices: holder@nvme1n1p3:dm-0,mount@nvme1n1:ubuntu--vg-ubuntu--lv,mount@nvme1n1:nvme1n1p1,mount@nvme1n1:nvme1n1p2, so not binding PCI dev
+Hugepages
+node     hugesize     free /  total
+node0   1048576kB        0 /      0
+node0      2048kB     1024 /   1024
+
+Type                      BDF             Vendor Device NUMA    Driver           Device     Block devices
+NVMe                      0000:c1:00.0    15b7   5045   unknown vfio-pci         -          -
+NVMe                      0000:c2:00.0    144d   a808   unknown nvme             nvme1      nvme1n1
+```
+You can see which device are passed through, in my case `0000:c1:00.0`. That's the device to pass in the lobos.cfg, under `[spdk_blobstore]`
+
+Once ready:
+```bash
+$ sudo ./lobos -c lobos.cfg 
+[2026-01-20 14:18:06.742840] Starting SPDK v26.01-pre git sha1 ef889f9dd / DPDK 25.07.0 initialization...
+[2026-01-20 14:18:06.742887] [ DPDK EAL parameters: lobos_spdk --no-shconf -c 0x1 --huge-unlink --no-telemetry --log-level=lib.eal:6 --log-level=lib.cryptodev:5 --log-level=lib.power:5 --log-level=user1:6 --base-virtaddr=0x200000000000 --match-allocations --file-prefix=spdk_pid92324 ]
+EAL: '-c <coremask>' option is deprecated, and will be removed in a future release
+EAL: 	Use '-l <corelist>' or '--lcores=<corelist>' option instead
+[2026-01-20 14:18:06.850908] app.c: 970:spdk_app_start: *NOTICE*: Total cores available: 1
+[2026-01-20 14:18:06.857697] reactor.c: 996:reactor_run: *NOTICE*: Reactor started on core 0
+Passed a NVMe device.
+didn't find existing blobstore, creating one
+alloc done! io unit size: 4096
+attempting to rebuild index if exist
+index build complete
+Starting S3 HTTP server for bucket lobos at 127.0.0.1:8080
+```
+
+
 ## Performance
 
-This was tested on a frame.work desktop (AMD RYZEN AI MAX+ 395) with 32GB of RAM for the CPU. The target directory was a dedicated XFS filesystem on a 500GB M.2 WD BLACK SN7100 NVMe.
-For small objects (32KiB) it looks like `warp` was taking as much if not more resources than lobos so a more performant machine can probably do more RPS.
+This was tested on a frame.work desktop (AMD RYZEN AI MAX+ 395) with 32GB of OS RAM. 
+Minio's wrap was used for the testing. For each test, I used 8 http threads, pinned to core 1-8 for the SPDK blobstore test, core 0 was used for the reactor.
+All tests were performed on a `WD_BLACK SN7100 500GB` with the following [factory specs](https://shop.sandisk.com/products/ssd/internal-ssd/wd-black-sn7100-nvme-internal-ssd?sku=WDS100T4X0E-00CJA0)
 
-### PUT 1 MiB and 50 concurrent ops (~1672MiB/s)
-![](./pics/put_1MiB_50c.png)
+|Engine| IO Size | Concurrency | Method | Result |
+|------|---------|---------|--------|--------|
+| File | 1 MiB | 50 | PUT | 2432.04 MiB/s |
+| File | 1 MiB | 50 | GET | 13711.60 MiB/s* |
+| SPDK | 1 MiB | 50 | PUT | 3066.46 MiB/s** |
+| SPDK | 1 MiB | 50 | GET | 5033.71 MiB/s |
+| File | 32KiB |  | PUT | TODO |
+| File | 32KiB |  | GET | TODO |
+| SPDK | 32KiB |  | PUT | TODO |
+| SPDK | 32KiB |  | GET | TODO |
 
-### GET 1MiB and 50 concurrent ops (~4767MiB/s)
-![](./pics/get_1MiB_50clients.png)
 
-### PUT 32KiB and 200 concurrent ops (~32.5k RPS)
-![](./pics/put_32KiB_200c.png)
+* This obviously hit the cache a _lot_ since it's above the factory specs however it's a good indicator that performance would be disk perf bound.
+** Performance degraded quick starting at 4392.9MiB/s and getting lower from there something I need to look at
 
-### GET 32KiB and 200 concurrent ops (~55.7k RPS)
-![](./pics/get_32KiB_200c.png)
+Note on SPDK performance: There's unecessary memcpy, something I'm actively working to change. Performance numbers will be updated once done.
 
 ## LMCache
 
