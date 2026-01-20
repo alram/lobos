@@ -192,7 +192,8 @@ All tests were performed on a `WD_BLACK SN7100 500GB` with the following [factor
 | SPDK | 32KiB |  | GET | TODO |
 
 
-* This obviously hit the cache a _lot_ since it's above the factory specs however it's a good indicator that performance would be disk perf bound.
+\* This obviously hit the cache a _lot_ since it's above the factory specs however it's a good indicator that performance would be disk perf bound.
+
 ** Performance degraded quick starting at 4392.9MiB/s and getting lower from there something I need to look at
 
 Note on SPDK performance: There's unecessary memcpy, something I'm actively working to change. Performance numbers will be updated once done.
