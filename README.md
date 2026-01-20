@@ -2,14 +2,15 @@
 
 **NOTE** This is a learning experiment to get familiar with C++ with no certain future maintenance or improvements. It's currently under active development.
 
-Lobos (local objectstore) allows a user to quickly deploy a local (bind to `127.0.0.1` only). Lobos supports 2 backends, a filesystem and SPDK's blobstore.
+Lobos (local objectstore) allows a user to quickly deploy a local (bind to `127.0.0.1` only) object store. 
+Lobos supports 2 backends, a filesystem and SPDK's blobstore:
  - Filesystem: When in filesystem mode, Lobos will translate S3 calls into filesystems'. The directory Lobos is pointed out will become the bucket name. For instance, if you point Lobos at `/mnt/disk0` your bucket name will be `disk0`.
- - Using SPDK's blobstore, Lobos bucket name will always `lobos`. See the SPDK documentation below for configuration information.
+ - SPDK's blobstore: Lobos bucket name will always `lobos`. See the SPDK documentation below for configuration information.
 
 The parsing is pretty naive so things can get broken quick but the following seem to work with `aws s3` cli:
  - ListBuckets
  - HeadBucket
- - ListObjectsV2 (no max-keys, always recursive)
+ - ListObjectsV2 (no max-keys)
  - HeadObject
  - GetObject (no range)
  - PutObject
@@ -71,12 +72,12 @@ device=0000:c1:00.0
 cluster_sz = 131072             # (Not impl)
 log_level = debug               # debug/none supported only currently
 reactor_core = 0                # (Not impl) SPDK pins its thread to a CPU core
-# SPDK polls by defaut, it can be switched to interupt
+# SPDK polls by default, it can be switched to interupt
 # mode, it's particularly to avoid spinning the CPU 
 # during dev/testing. For max performance do not set.
 # interupt_mode=true
 ```
-Pinning and threads configuration is not required but recommended if you want the highest performance (and avoid SMT cores if possible)
+Pinning and threads configuration is not required but recommended if you want the highest performance (and avoid SMT cores if possible).
 
 ### Launching in filesystem:
 
@@ -91,8 +92,8 @@ Using the `aws` cli:
 
 ```bash
 $ aws --endpoint-url http://127.0.0.1:8080 s3 ls
-1969-12-31 16:00:00 lobos
-$ aws --endpoint-url http://127.0.0.1:8080 s3 ls s3://lobos
+1969-12-31 16:00:00 demo
+$ aws --endpoint-url http://127.0.0.1:8080 s3 ls s3://demo
                            PRE .vscode/
                            PRE src/
                            PRE testdir/
@@ -100,7 +101,7 @@ $ aws --endpoint-url http://127.0.0.1:8080 s3 ls s3://lobos
 2025-12-30 13:26:00        448 Makefile
 2026-01-03 16:07:13    3010968 lobos
 2026-01-03 15:46:37      30100 out
-$ aws --endpoint-url http://127.0.0.1:8080 s3 ls s3://lobos/src/
+$ aws --endpoint-url http://127.0.0.1:8080 s3 ls s3://demo/src/
                            PRE boost_1_90_0/
                            PRE index/
                            PRE s3http/
@@ -113,12 +114,12 @@ $ aws --endpoint-url http://127.0.0.1:8080 s3 ls s3://lobos/src/
 Since there's no auth, you can also just use curl:
 
 ```bash
-$ time aws --endpoint-url http://127.0.0.1:8080 s3 ls s3://lobos/src/ > /dev/null
+$ time aws --endpoint-url http://127.0.0.1:8080 s3 ls s3://demo/src/ > /dev/null
 real	0m0.602s
 user	0m0.403s
 sys	0m0.072s
 
-$ time curl -s http://127.0.0.1:8080/lobos/src/ > /dev/null
+$ time curl -s http://127.0.0.1:8080/demo/src/ > /dev/null
 real	0m0.123s
 user	0m0.004s
 sys	0m0.002s
@@ -128,22 +129,22 @@ sys	0m0.002s
 
 *NOTE* If launching Lobos with SPDK make sure huge pages are configured, more info https://spdk.io/doc/getting_started.html
 
-While Lobos supports malloc bdev, it's mostly for testing, you'll want a dedicated NVMe to use SPDK blobstore.
+While Lobos supports malloc bdev, it's mostly for testing. You'll want a dedicated NVMe to use SPDK blobstore.
 
 Running:
 ```bash
 $ sudo ./src/spdk/scripts/setup.sh
 ```
-Should automatically passthrough any non-used NVMe. You can use the env vars `PCI_ALLOWED` or `PCI_BLOCKED` to explicitely allow or block vfio passthrough on devices.
-If your NVMe isn't automatically added even with `PCI_ALLOWED` it's most likely because it was used before and need to be formatted. You can run:
+Should automatically passthrough any non-used NVMe. You can use the env vars `PCI_ALLOWED` or `PCI_BLOCKED` to explicitly allow or block vfio passthrough on devices.
+If your NVMe isn't automatically added even with `PCI_ALLOWED`, it's most likely because it was used before and need to be formatted. You can run:
 ```bash
 sudo nvme format --ses=1 /dev/disk/by-id/<controller_nsid> --force
 ```
-I highly recommend always using `by-id` instead of the device in the kernel (e.g. `nvme0n1`) since by doing passthrough, those can change (I learned that the hard way, erasign my whole OS disk)
+I highly recommend always using `by-id` instead of the device in the kernel (e.g. `nvme0n1`) since by doing passthrough, those can change (I learned that the hard way, erasing my whole OS disk).
 
 Running
 ```bash
-alram@aidumdum:~/code/lobos$ sudo ./src/spdk/scripts/setup.sh status
+$ sudo ./src/spdk/scripts/setup.sh status
 0000:c2:00.0 (144d a808): Active devices: holder@nvme1n1p3:dm-0,mount@nvme1n1:ubuntu--vg-ubuntu--lv,mount@nvme1n1:nvme1n1p1,mount@nvme1n1:nvme1n1p2, so not binding PCI dev
 Hugepages
 node     hugesize     free /  total
@@ -154,7 +155,7 @@ Type                      BDF             Vendor Device NUMA    Driver          
 NVMe                      0000:c1:00.0    15b7   5045   unknown vfio-pci         -          -
 NVMe                      0000:c2:00.0    144d   a808   unknown nvme             nvme1      nvme1n1
 ```
-You can see which device are passed through, in my case `0000:c1:00.0`. That's the device to pass in the lobos.cfg, under `[spdk_blobstore]`
+You can see which devices are passed through, in my case `0000:c1:00.0`. That's the device to pass in the lobos.cfg, under `[spdk_blobstore]`.
 
 Once ready:
 ```bash
@@ -176,7 +177,7 @@ Starting S3 HTTP server for bucket lobos at 127.0.0.1:8080
 
 ## Performance
 
-This was tested on a frame.work desktop (AMD RYZEN AI MAX+ 395) with 32GB of OS RAM. 
+This was tested on a framework desktop (AMD RYZEN AI MAX+ 395) with 32GB of OS RAM. 
 Minio's wrap was used for the testing. For each test, I used 8 http threads, pinned to core 1-8 for the SPDK blobstore test, core 0 was used for the reactor.
 All tests were performed on a `WD_BLACK SN7100 500GB` with the following [factory specs](https://shop.sandisk.com/products/ssd/internal-ssd/wd-black-sn7100-nvme-internal-ssd?sku=WDS100T4X0E-00CJA0)
 
@@ -196,7 +197,7 @@ All tests were performed on a `WD_BLACK SN7100 500GB` with the following [factor
 
 ** Performance degraded quick starting at 4392.9MiB/s and getting lower from there something I need to look at
 
-Note on SPDK performance: There's unecessary memcpy, something I'm actively working to change. Performance numbers will be updated once done.
+Note on SPDK performance: There's unnecessary memcpy, something I'm actively working to change. Performance numbers will be updated once done.
 
 ## LMCache
 
