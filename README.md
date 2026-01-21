@@ -72,10 +72,10 @@ device=0000:c1:00.0
 cluster_sz = 131072             # (Not impl)
 log_level = debug               # debug/none supported only currently
 reactor_core = 0                # (Not impl) SPDK pins its thread to a CPU core
-# SPDK polls by default, it can be switched to interupt
+# SPDK polls by default, it can be switched to interrupt
 # mode, it's particularly to avoid spinning the CPU 
 # during dev/testing. For max performance do not set.
-# interupt_mode=true
+# interrupt_mode=true
 ```
 Pinning and threads configuration is not required but recommended if you want the highest performance (and avoid SMT cores if possible).
 

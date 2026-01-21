@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
             ("spdk_blobstore.cluster_sz", po::value<uint32_t>()->default_value(131072))
             ("spdk_blobstore.log_level", po::value<std::string>()->default_value(""))
             ("spdk_blobstore.reactor_core", po::value<int>()->default_value(8))
-            ("spdk_blobstore.interupt_mode", po::value<bool>()->default_value(false));
+            ("spdk_blobstore.interrupt_mode", po::value<bool>()->default_value(false));
     
     po::variables_map vm;
 
@@ -134,7 +134,7 @@ int main(int argc, char **argv) {
         bucket = "lobos";
         SpdkReactorConf conf = {
             vm["spdk_blobstore.log_level"].as<std::string>(),
-            vm["spdk_blobstore.interupt_mode"].as<bool>(),
+            vm["spdk_blobstore.interrupt_mode"].as<bool>(),
             vm["spdk_blobstore.reactor_core"].as<int>(),
         };
         spdk_reactor = std::make_unique<SpdkReactor>(conf);
