@@ -5,6 +5,8 @@
 #include <string>
 #include <spdk/env.h>
 
+// TODO there's prolly some nasty bug in spdk_buffer (aka. no confidence)
+
 class session_buffer {
 public:
     virtual ~session_buffer() = default;
@@ -16,10 +18,8 @@ public:
     virtual void append(std::string_view sv) {
         append(reinterpret_cast<const uint8_t*>(sv.data()), sv.size());
     }
-
-
+    virtual void reserve(size_t size) = 0;
 };
-
 
 class vector_buffer : public session_buffer {
     std::vector<uint8_t> buf_;
@@ -32,6 +32,9 @@ public:
     void append(const uint8_t* data, size_t len) override {
         buf_.insert(buf_.end(), data, data + len);
     }
+    void reserve(size_t cap) {
+        buf_.reserve(cap);
+    }
 };
 
 
@@ -39,7 +42,10 @@ class spdk_buffer : public session_buffer {
     public:
         explicit spdk_buffer(size_t size)
             : size_(size)
-            , data_(static_cast<uint8_t*>(spdk_malloc(size, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA)))
+            , cap_(size)
+            , data_(size > 0 
+                ? static_cast<uint8_t*>(spdk_malloc(size, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA))
+                : nullptr)        
         {
             if (!data_ && size > 0)
                 throw std::bad_alloc();
@@ -95,13 +101,30 @@ class spdk_buffer : public session_buffer {
             size_ = n_size;
         }
 
+        void reserve(size_t cap) {
+            if (cap <= cap_) return;
+            uint8_t* new_data = static_cast<uint8_t*>(
+                spdk_malloc(cap, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA));
+            if (!new_data) throw std::bad_alloc();
+            
+            if (data_) {
+                if (size_ > 0) std::memcpy(new_data, data_, size_);
+                spdk_free(data_);
+            }
+            
+            data_ = new_data;
+            cap_ = cap;
+        }
+
         void append(const uint8_t* data, size_t len) override {
             size_t old_size = size_;
-            resize(old_size+len);
-            std:memcpy(data_ + old_size, data, len);
+            if ((old_size + len) > size_)
+                resize(old_size+len);
+            memcpy(data_ + old_size, data, len);
         }
 
     private:
         size_t size_;
+        size_t cap_;
         uint8_t* data_;
 };

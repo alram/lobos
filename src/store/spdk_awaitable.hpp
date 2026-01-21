@@ -23,7 +23,7 @@ asio::awaitable<T> spdk_awaitable(
         std::function<void(std::function<void(T, int)>)> work;
 
         static void execute(void* arg) {
-            auto* s = static_cast<state*>(arg);
+            auto s = static_cast<state*>(arg);
             s->work([s](T result, int err) {
                 boost::system::error_code ec;
                 if (err)
@@ -35,7 +35,7 @@ asio::awaitable<T> spdk_awaitable(
         }
     };
 
-    auto* s = new state{ch, std::move(work)};
+    auto s = new state{ch, std::move(work)};
     spdk_thread_send_msg(thread, &state::execute, s);
 
     auto [ec, result] = co_await ch->async_receive(asio::as_tuple(asio::use_awaitable));
@@ -61,7 +61,7 @@ inline asio::awaitable<void> spdk_awaitable(
         std::function<void(std::function<void(int)>)> work;
 
         static void execute(void* arg) {
-            auto* s = static_cast<state*>(arg);
+            auto s = static_cast<state*>(arg);
             s->work([s](int err) {
                 boost::system::error_code ec;
                 if (err)
@@ -73,7 +73,7 @@ inline asio::awaitable<void> spdk_awaitable(
         }
     };
 
-    auto* s = new state{ch, std::move(work)};
+    auto s = new state{ch, std::move(work)};
     spdk_thread_send_msg(thread, &state::execute, s);
 
     auto [ec] = co_await ch->async_receive(asio::as_tuple(asio::use_awaitable));

@@ -124,7 +124,7 @@ struct BlobMetadata {
 
 struct IoCtx {
     std::string key;
-    std::span<uint8_t> buffer;
+    session_buffer* buffer;
     std::unique_ptr<BlobMetadata> md;
 
     spdk_blob_id blob_id;
@@ -133,10 +133,10 @@ struct IoCtx {
 
     IoCtx() = default;
 
-    IoCtx(std::span<uint8_t> buf)
+    IoCtx(session_buffer& buf)
         :
         size(buf.size()),
-        buffer(buf)
+        buffer(&buf)
     {}
 };
 
@@ -151,15 +151,15 @@ public:
     };
 
     void init_store(std::string devSpec) override;
-    asio::awaitable<size_t> do_write(std::string o, std::span<uint8_t> data) override;
-    asio::awaitable<int> do_read(std::string o, uint64_t offset, std::span<uint8_t> buffer) override;
+    asio::awaitable<size_t> do_write(std::string o, session_buffer& buffer) override;
+    asio::awaitable<int> do_read(std::string o, uint64_t offset, session_buffer& buffer) override;
     asio::awaitable<bool> do_delete(std::string_view o) override;
     void shutdown_store() override { shutdown_blobstore(); };
     asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string_view o) override;
-    asio::awaitable<void> do_list(std::string_view prefix, std::vector<uint8_t>& buffer) override;
-    Task shutdown_blobstore();
+    asio::awaitable<void> do_list(std::string_view prefix, session_buffer& buffer) override;
+    
+    void shutdown_blobstore();
     void build_index_at_boot();
-
     static void iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno);
     static void get_blob_metadata(spdk_blob* blob, Object* o, const char*& key);
 
@@ -172,17 +172,15 @@ private:
     std::unique_ptr<IndexStore> index_ = nullptr;
     SpdkConfig conf;
     std::atomic<bool> index_ready = false;
+    std::atomic<bool> store_ready = false;
 };
 
 struct BlobOpCtx {
     SpdkStore* store;
     IoCtx* ioctx;
     std::function<void(int)> complete;
-    void* dma_buf = nullptr;
 
     ~BlobOpCtx() {
-        if(dma_buf)
-            spdk_free(dma_buf);
         delete ioctx;
     }
 };

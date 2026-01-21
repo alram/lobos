@@ -148,17 +148,19 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_head_object(beast:
     co_return res;
 }
 
-asio::awaitable<http::message_generator> S3HttpServer::handle_list_objects(beast::string_view prefix, http::request<http::buffer_body>&& req, std::shared_ptr<std::vector<uint8_t>> session_buffer) {
-    session_buffer->clear();
+asio::awaitable<http::message_generator> S3HttpServer::handle_list_objects(beast::string_view prefix, 
+    http::request<http::buffer_body>&& req, std::shared_ptr<session_buffer> session_buffer) {
+    // idk man 1k feels like plenty ¯\_(ツ)_/¯ TODO
+    session_buffer->reserve(1024);
     std::string h = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
         "<ListBucketResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
         "<Name>" + bucket_name + "</Name>"
         "<Prefix>" + std::string(prefix) + "</Prefix>"
         "<MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated>";
-    session_buffer->insert(session_buffer->end(), h.begin(), h.end());
+    session_buffer->append(h);
     co_await store_->do_list(prefix, *session_buffer);
     std::string f = "<Marker></Marker></ListBucketResult>";
-    session_buffer->insert(session_buffer->end(), f.begin(), f.end());
+    session_buffer->append(f);
     
     http::response<http::buffer_body> res{http::status::ok, req.version()};
     res.set(http::field::server, SERVER_NAME);
@@ -174,7 +176,7 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_list_objects(beast
 
 // TODO - get/put should handle chunks for large IO however this will require
 // a lot of changes so for now we dont
-asio::awaitable<http::message_generator> S3HttpServer::handle_get_object(beast::string_view object, http::request<http::buffer_body>&& req, std::shared_ptr<std::vector<uint8_t>> session_buffer) {
+asio::awaitable<http::message_generator> S3HttpServer::handle_get_object(beast::string_view object, http::request<http::buffer_body>&& req, std::shared_ptr<session_buffer> session_buffer) {
     auto [size, last_modified] = co_await store_->do_metadata_req(object);
     
     if (last_modified == 0)
@@ -199,7 +201,7 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_get_object(beast::
 }
 
 asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::request<http::buffer_body>&& req, 
-    std::shared_ptr<std::vector<uint8_t>> session_buffer) {
+    std::shared_ptr<session_buffer> session_buffer) {
     // Returns a bad request response
     auto const bad_request_res =
     [&req](beast::string_view why)
@@ -333,9 +335,9 @@ asio::awaitable<void> S3HttpServer::do_session(beast::tcp_stream stream) {
     beast::flat_buffer buffer;
     //TODO: might want to use a bufferpool 
     // https://claude.ai/chat/2e353513-17f0-4f0a-83e2-410cdabe1935
-    auto session_buffer = std::make_shared<std::vector<uint8_t>>();
     for(;;)
     {
+        auto session_buffer = make_buffer(0);
         // Set timeout
         stream.expires_after(std::chrono::seconds(30));
 

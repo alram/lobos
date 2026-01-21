@@ -18,7 +18,7 @@ The parsing is pretty naive so things can get broken quick but the following see
 
  Benchmark tools `elbencho` and `warp` work as well (but checksums aren't supported)
 
- SPDK support is still very experimental and while the whole project has a lot of shortcuts that needs to addressed, SPDK has a lot more (buffers, index, shutdown, etc.). Working on this at the moment.
+ SPDK support is still very experimental and while the whole project has a lot of shortcuts that needs to addressed, SPDK has a lot more. Working on this at the moment.
 
 ## Building
 

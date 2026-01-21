@@ -11,16 +11,24 @@
 #define LOBOS_BDEV_NAME_BASE "Lobos0"
 #define LOBOS_BDEV_NAME "Lobos0n1"
 
+struct BlobStoreContext {
+    std::atomic<bool> init_done{false};
+    std::atomic<bool> shutdown_done{false};
+    spdk_blob_store *bs = nullptr;
+    spdk_bs_dev *bs_dev = nullptr;
 
-static void base_bdev_event_cb(enum spdk_bdev_event_type type, spdk_bdev *bdev, void *event_ctx) {
-	SPDK_WARNLOG("Unsupported bdev event: type %d\n", type);
-    //todo add event handling
-}
+    std::function<void(std::function<void()>)> on_shutdown_request;
+};
 
-class BlobStoreInitalizer {
+class BlobStoreInitializer {
     public:
-        virtual ~BlobStoreInitalizer() = default;
+        virtual ~BlobStoreInitializer() = default;
         virtual spdk_blob_store* initialize(spdk_thread* t) = 0;
+        virtual std::shared_ptr<BlobStoreContext> get_context() { return ctx_; }
+    protected:
+        explicit BlobStoreInitializer(std::shared_ptr<BlobStoreContext> ctx) 
+            : ctx_(std::move(ctx)) {}
+        std::shared_ptr<BlobStoreContext> ctx_;
 };
 
 void send_rpc_req(const std::string& method, const std::string params) {
@@ -44,26 +52,49 @@ void send_rpc_req(const std::string& method, const std::string params) {
         spdk_jsonrpc_client_close(client);
 }  
 
-struct InitContext {
-    bool done = false;
-    spdk_blob_store* bs = nullptr;
-};
+static void base_bdev_event_cb(enum spdk_bdev_event_type type, spdk_bdev *bdev, void *event_ctx) {
+    std::cout << "base_bdev_event_cb triggered" << std::endl;
+    auto ctx = static_cast<BlobStoreContext*>(event_ctx);
+
+    if (type == SPDK_BDEV_EVENT_REMOVE) {
+        std::cout << "caught SPDK_BDEV_EVENT_REMOVE" << std::endl;
+
+        if (!ctx->bs) {
+            // we can't shutdown anything
+            std::cout << "blobstore not available, marking shutdown done" << std::endl;
+            ctx->shutdown_done = true;
+            return;
+        }
+
+        spdk_bs_unload(ctx->bs, [](void *cb_arg, int bserrno) {
+            std::cout << "spdk bs unload: " << bserrno << std::endl;
+            auto ctx = static_cast<BlobStoreContext*>(cb_arg);
+            ctx->bs = nullptr;
+            ctx->shutdown_done = true;
+            return;
+        }, ctx);
+    }
+}
 
 // We keep that shit raw for Malloc since it's really only
 // for testing (and CI if ever... lol)... send and pray
-class MallocBSInitializer : public BlobStoreInitalizer {
+class MallocBSInitializer : public BlobStoreInitializer {
     public:
+        MallocBSInitializer() 
+                : BlobStoreInitializer(std::make_shared<BlobStoreContext>()) {}
+
         spdk_blob_store* initialize(spdk_thread* t) override {
             std::string params = "{\"name\":\""+ std::string(LOBOS_BDEV_NAME) + "\",\"num_blocks\": 32768,\"block_size\":512}";
             send_rpc_req("bdev_malloc_create", params);
 
-            InitContext ctx;
+            BlobStoreContext* ctx_raw = ctx_.get();
+
             auto run_on_spdk_thread = [](void *args) {
-                auto* context = static_cast<InitContext*>(args);
+                auto context = static_cast<BlobStoreContext*>(args);
                 spdk_bs_dev* bs_dev = nullptr;
-                int rc = spdk_bdev_create_bs_dev_ext(LOBOS_BDEV_NAME, base_bdev_event_cb, nullptr, &bs_dev);
+                int rc = spdk_bdev_create_bs_dev_ext(LOBOS_BDEV_NAME, base_bdev_event_cb, context, &bs_dev);
                 if (rc !=0) {
-                    context->done = true;
+                    context->init_done = true;
                     return;
                 }
 
@@ -72,24 +103,24 @@ class MallocBSInitializer : public BlobStoreInitalizer {
                 opts.cluster_sz = 131072;
 
                 spdk_bs_init(bs_dev, &opts, [](void *cb_args, spdk_blob_store* bs, int bserr) {
-                    auto* final_ctx = static_cast<InitContext*>(cb_args);
+                    auto final_ctx = static_cast<BlobStoreContext*>(cb_args);
                     if (bserr == 0) {
                         final_ctx->bs = bs;
                     } else {
                         std::cerr << "Blobstore init failed with error: " << bserr << std::endl;
                     }
-                    final_ctx->done = true; // Signal the main thread
+                    final_ctx->init_done = true; // Signal the main thread
                 }, args);
             };
             
-            spdk_thread_send_msg(t, run_on_spdk_thread, &ctx);
+            spdk_thread_send_msg(t, run_on_spdk_thread, ctx_raw);
 
             // just wait in a loop; could do an awaiter but :shrug: it's all in the init path who cares
-            while(!ctx.done) {
+            while(!ctx_->init_done) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
 
-            return ctx.bs;
+            return ctx_->bs;
         }
 
 };
@@ -100,11 +131,15 @@ class MallocBSInitializer : public BlobStoreInitalizer {
 // We need to connect the nvme controller to a bdev
 // then check if a blobstore already exists on it
 // if so we load it, if not we create it
-class NvmeBSInitializer : public BlobStoreInitalizer {
+class NvmeBSInitializer : public BlobStoreInitializer {
 private:
     std::string pci_addr;
 public:
-    NvmeBSInitializer(std::string addr) : pci_addr(addr) {}
+    NvmeBSInitializer(std::string addr) 
+    : pci_addr(addr)
+    , BlobStoreInitializer(std::make_shared<BlobStoreContext>()) 
+    {}
+
     spdk_blob_store* initialize(spdk_thread* t) override {
 
         //TODO: using C API instead of RPC might be more robust..
@@ -114,14 +149,15 @@ public:
 
         // Now that we have a bdev, we can try to load blobstore and if it fails just
         // create it
-        InitContext ctx;
+        BlobStoreContext* ctx_raw = ctx_.get();
+
         auto run_on_spdk_thread = [](void* args) {
-            auto context = static_cast<InitContext*>(args);
+            auto context = static_cast<BlobStoreContext*>(args);
             spdk_bs_dev* bs_dev = nullptr;
 
-            int rc = spdk_bdev_create_bs_dev_ext(LOBOS_BDEV_NAME, base_bdev_event_cb, nullptr, &bs_dev);
+            int rc = spdk_bdev_create_bs_dev_ext(LOBOS_BDEV_NAME, base_bdev_event_cb, context, &bs_dev);
             if (rc !=0) {
-                context->done = true;
+                context->init_done = true;
                 return;
             }
 
@@ -130,48 +166,47 @@ public:
             opts.cluster_sz = 131072;
 
             spdk_bs_load(bs_dev, &opts, [](void *cb_args, spdk_blob_store* bs, int bserr) {
-                auto ctx = static_cast<InitContext*>(cb_args);
+                auto ctx = static_cast<BlobStoreContext*>(cb_args);
                 if (bserr == 0) {
                     std::cout << "found existing blobstore!" << std::endl;
                     ctx->bs = bs;
-                    ctx->done = true;
+                    ctx->init_done = true;
                 } else if (bserr == -EILSEQ) {
                     std::cout << "didn't find existing blobstore, creating one" << std::endl;
                     spdk_bs_opts opts{};
                     spdk_bs_opts_init(&opts, sizeof(opts));
                     opts.cluster_sz = 131072;
 
-                    // since load failed, the previous bs_dev go freed
+                    // since load failed, the previous bs_dev got freed
                     spdk_bs_dev* bs_dev = nullptr;
-                    int rc = spdk_bdev_create_bs_dev_ext(LOBOS_BDEV_NAME, base_bdev_event_cb, nullptr, &bs_dev);
+                    int rc = spdk_bdev_create_bs_dev_ext(LOBOS_BDEV_NAME, base_bdev_event_cb, ctx, &bs_dev);
                     if (rc !=0) {
-                        ctx->done = true;
+                        ctx->init_done = true;
                         return;
                     }
                     spdk_bs_init(bs_dev, &opts, [](void *cb_args, spdk_blob_store* bs, int bserr) {
-                        auto* final_ctx = static_cast<InitContext*>(cb_args);
+                        auto final_ctx = static_cast<BlobStoreContext*>(cb_args);
                         if (bserr == 0) {
                             final_ctx->bs = bs;
                         } else {
                             std::cerr << "Blobstore init failed with error: " << bserr << std::endl;
                         }
-                        final_ctx->done = true; // Signal the main thread
+                        final_ctx->init_done = true; // Signal the main thread
                     }, 
                     ctx);
                 } else {
                     std::cout << "Error loading blobstore: " << bserr << std::endl;
-                    ctx->done = true;
+                    ctx->init_done = true;
                 }
             },
             context);
         };
 
-        spdk_thread_send_msg(t, run_on_spdk_thread, &ctx);
-        // just wait in a loop; could do an awaiter but :shrug: it's all in the init path who cares
-        while(!ctx.done) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        spdk_thread_send_msg(t, run_on_spdk_thread, ctx_raw);
+        while(!ctx_->init_done) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
 
-        return ctx.bs; // Return the resulting pointer
+        return ctx_->bs;
     }
 };

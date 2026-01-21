@@ -128,9 +128,11 @@ int main(int argc, char **argv) {
     std::unique_ptr<Store> store;
     std::unique_ptr<SpdkReactor> spdk_reactor;
     std::string bucket = "";
+    bool use_spdk = false;
 
     std::string backend = vm["entry.backend"].as<std::string>();
     if (backend == "spdk_blobstore") {
+        use_spdk = true;
         bucket = "lobos";
         SpdkReactorConf conf = {
             vm["spdk_blobstore.log_level"].as<std::string>(),
@@ -164,7 +166,8 @@ int main(int argc, char **argv) {
     S3HttpServer server("127.0.0.1", 
             vm["entry.port"].as<int>(), 
             bucket, 
-            store.get());
+            store.get(),
+            use_spdk);
 
     int http_threads = vm["entry.http_threads"].as<int>();
     std::string pins_s = vm["entry.http_threads_cores"].as<std::string>();

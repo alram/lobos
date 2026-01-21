@@ -9,14 +9,14 @@ namespace beast = boost::beast;
 namespace asio = boost::asio;
 namespace fs = boost::filesystem;
 
-asio::awaitable<size_t> FsStore::do_write(std::string o, std::span<uint8_t> data) {
+asio::awaitable<size_t> FsStore::do_write(std::string o, session_buffer& buffer) {
     create_dest_dirs_if_not_exist(o);
     // We always overwrite since it's an object
     int flags = O_WRONLY | O_CREAT | O_TRUNC;
     int fd = open(o.c_str(), flags, 0644);
     size_t total_written = 0;
-    while (total_written < data.size()) {
-        ssize_t written = write(fd, data.data() + total_written, data.size() - total_written);
+    while (total_written < buffer.size()) {
+        ssize_t written = write(fd, buffer.data() + total_written, buffer.size() - total_written);
         if (written < 0) {
             if (errno == EINTR) continue;
             throw std::runtime_error("Write failed: " + std::string(strerror(errno)));
@@ -30,7 +30,7 @@ asio::awaitable<size_t> FsStore::do_write(std::string o, std::span<uint8_t> data
 
 }
 
-asio::awaitable<int> FsStore::do_read(std::string o, uint64_t offset, std::span<uint8_t> buffer) {
+asio::awaitable<int> FsStore::do_read(std::string o, uint64_t offset, session_buffer& buffer) {
     std::string f(o);
     int fd = open(f.c_str(), O_RDONLY);
     if (fd < 0)
@@ -49,7 +49,7 @@ asio::awaitable<bool> FsStore::do_delete(std::string_view o) {
     co_return deleted;
 }
 
-asio::awaitable<void> FsStore::do_list(std::string_view prefix, std::vector<uint8_t>& buffer) {
+asio::awaitable<void> FsStore::do_list(std::string_view prefix, session_buffer& buffer) {
     std::string pref_s(prefix);
     fs::path path = pref_s;
     if (!fs::exists(path)) {
@@ -89,7 +89,7 @@ asio::awaitable<void> FsStore::do_list(std::string_view prefix, std::vector<uint
                 "<Size>" + std::to_string(fs::file_size(entry.path())) + "</Size>"
                 "</Contents>";
         }
-        buffer.insert(buffer.end(), s.begin(), s.end());
+        buffer.append(s);
     }
     co_return;
 };

@@ -7,28 +7,28 @@
 #define BLOB_META_NAME "metadata"
 #define BLOB_META_KEY "key"
 
-Task SpdkStore::shutdown_blobstore() {
-    SpdkAwaiter awaiter;
-    std::pair<SpdkStore*, SpdkAwaiter*> context = {this, &awaiter};
+void SpdkStore::shutdown_blobstore() {
+    std::cout << "shutting down blobstore" << std::endl;
+    auto ctx = static_cast<SpdkStore*>(this);
 
     auto unload_blobstore = [](void* args) {
-        auto ctx = static_cast<std::pair<SpdkStore*,SpdkAwaiter*>*>(args);
-        spdk_bs_free_io_channel(ctx->first->io_channel_);
-        spdk_bs_unload(ctx->first->bs_, [](void *cb_arg, int bserrno) {
-            auto a = static_cast<SpdkAwaiter*>(cb_arg);
-            a->complete(bserrno);
-        }, ctx->second);
+        auto ctx = static_cast<SpdkStore*>(args);
+        spdk_bs_free_io_channel(ctx->io_channel_);
+        spdk_bs_unload(ctx->bs_, [](void *cb_arg, int bserrno) {
+            auto ctx = static_cast<SpdkStore*>(cb_arg);
+            ctx->store_ready = false;
+        }, ctx);
     };
-    spdk_thread_send_msg(spdk_reactor_->get_thread(), unload_blobstore, &context);
+    spdk_thread_send_msg(spdk_reactor_->get_thread(), unload_blobstore, &ctx);
 
-    auto [rc, res] = co_await awaiter;
-    std::cout << "blobstore shutdown rc: " << rc << std::endl;
+    while (store_ready) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    }
+    std::cout << "blobstore shutdown complete" << std::endl;
     
     //TODO detach nvme controller from spdk instance.
     // send_rpc_req("bdev_nvme_detach_controller", 
     //              "{\"name\":\"" + std::string(LOBOS_BDEV_NAME_BASE) + "\"}");
-    
-    co_return;
 }
 
 // Static callback that handles each blob and chains to the next
@@ -70,7 +70,7 @@ void SpdkStore::build_index_at_boot() {
 }
 
 void SpdkStore::init_store(std::string devSpec) {
-    std::unique_ptr<BlobStoreInitalizer> dev;
+    std::unique_ptr<BlobStoreInitializer> dev;
     if (devSpec == "malloc") {
         std::cout << "Passed a malloc device." << std::endl;
         dev = std::make_unique<MallocBSInitializer>();
@@ -102,10 +102,9 @@ void SpdkStore::init_store(std::string devSpec) {
     
     while(!ctx->io_unit_size_ || !ctx->io_channel_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        std::cout << "alloc done! io unit size: " << io_unit_size_ << std::endl;
     }
-
-    backend = "spdk_blobstore";
+    std::cout << "alloc done! io unit size: " << io_unit_size_ << std::endl;
+    store_ready = true;
 
     // start the in-memory index.
     index_ = std::make_unique<IndexStore>();
@@ -115,7 +114,7 @@ void SpdkStore::init_store(std::string devSpec) {
     }
 }
 
-asio::awaitable<void> SpdkStore::do_list(std::string_view prefix, std::vector<uint8_t>& buffer) {
+asio::awaitable<void> SpdkStore::do_list(std::string_view prefix, session_buffer& buffer) {
     // this logic should really be in the index
     auto it = index_->index.lower_bound(prefix);
     std::string pre;
@@ -151,21 +150,20 @@ asio::awaitable<void> SpdkStore::do_list(std::string_view prefix, std::vector<ui
                 "<Size>" + std::to_string(it->second.size) + "</Size>"
                 "</Contents>";
         }
-
-        buffer.insert(buffer.end(), s.begin(), s.end());
+        buffer.append(s);
     }
     co_return;
 }
 
-asio::awaitable<size_t> SpdkStore::do_write(std::string o, std::span<uint8_t> data) {
+asio::awaitable<size_t> SpdkStore::do_write(std::string o, session_buffer& buffer) {
 
-    auto* ioctx = new IoCtx(data);
+    auto ioctx = new IoCtx(buffer);
     ioctx->key = o;
     ioctx->md = std::make_unique<BlobMetadata>();
     ioctx->md->size = ioctx->size;
     ioctx->md->last_modified = std::time(nullptr);
     co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, ioctx](auto complete) {
-        auto* op = new BlobOpCtx{this, ioctx, std::move(complete)};
+        auto op = new BlobOpCtx{this, ioctx, std::move(complete)};
         spdk_bs_create_blob(bs_, [](void* cb_arg, spdk_blob_id blob_id, int bserrno) {
             auto ctx = static_cast<BlobOpCtx*>(cb_arg);
             // std::cout << "create blob rc: " << bserrno << std::endl;
@@ -203,12 +201,9 @@ asio::awaitable<size_t> SpdkStore::do_write(std::string o, std::span<uint8_t> da
                         if (ctx->ioctx->size % ctx->store->io_unit_size_ != 0) {
                             write_size++;
                         }
-                        // TODO get rid of memcpy here, we should reuse the same buffer from beast
-                        ctx->dma_buf = spdk_malloc(ctx->ioctx->buffer.size(), 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA);
-                        memcpy(ctx->dma_buf, ctx->ioctx->buffer.data(), ctx->ioctx->buffer.size());
                         spdk_blob_io_write(ctx->ioctx->blob, 
                             ctx->store->io_channel_, 
-                            ctx->dma_buf, 0, write_size,
+                            ctx->ioctx->buffer->data(), 0, write_size,
                             [](void *cb_arg, int bserrno) {
                                 // std::cout << "write blob rc: " << bserrno << std::endl;
                                 auto ctx = static_cast<BlobOpCtx*>(cb_arg);
@@ -235,16 +230,16 @@ asio::awaitable<size_t> SpdkStore::do_write(std::string o, std::span<uint8_t> da
         }, op); //spdk_bs_create_blob
     });
 
-    co_return data.size();
+    co_return buffer.size();
 }
 
-asio::awaitable<int> SpdkStore::do_read(std::string o, uint64_t offset, std::span<uint8_t> buffer) {
+asio::awaitable<int> SpdkStore::do_read(std::string o, uint64_t offset, session_buffer& buffer) {
     auto it = index_->index.find(o);
     if (it == index_->index.end()) {
         co_return -ENOENT;
     }
 
-    auto* ioctx = new IoCtx(buffer);
+    auto ioctx = new IoCtx(buffer);
     ioctx->key = o;
     ioctx->blob_id = it->second.blob_id;
 
@@ -254,15 +249,13 @@ asio::awaitable<int> SpdkStore::do_read(std::string o, uint64_t offset, std::spa
             auto ctx = static_cast<BlobOpCtx*>(cb_arg);
             if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
             ctx->ioctx->blob = blob;
-            ctx->dma_buf = spdk_malloc(ctx->ioctx->buffer.size(), 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA);
-            uint64_t io_units = ctx->ioctx->buffer.size() / ctx->store->io_unit_size_;
-            if (ctx->ioctx->buffer.size() % ctx->store->io_unit_size_ != 0) {
+            uint64_t io_units = ctx->ioctx->buffer->size() / ctx->store->io_unit_size_;
+            if (ctx->ioctx->buffer->size() % ctx->store->io_unit_size_ != 0) {
                 io_units++;
             }
-            spdk_blob_io_read(blob, ctx->store->io_channel_, ctx->dma_buf, 0, io_units, [](void *cb_arg, int bserrno) {
+            spdk_blob_io_read(blob, ctx->store->io_channel_, ctx->ioctx->buffer->data(), 0, io_units, [](void *cb_arg, int bserrno) {
                 auto ctx = static_cast<BlobOpCtx*>(cb_arg);
                 if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
-                memcpy(ctx->ioctx->buffer.data(), ctx->dma_buf, ctx->ioctx->buffer.size());
                 spdk_blob_close(ctx->ioctx->blob, [](void *cb_arg, int bserrno) {
                 auto ctx = static_cast<BlobOpCtx*>(cb_arg);
                 ctx->complete(0);
@@ -281,7 +274,7 @@ asio::awaitable<bool> SpdkStore::do_delete(std::string_view o) {
         co_return -ENOENT;
     }
 
-    auto* ioctx = new IoCtx();
+    auto ioctx = new IoCtx();
     ioctx->key = o;
     ioctx->blob_id = it->second.blob_id;
 

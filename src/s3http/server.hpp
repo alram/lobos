@@ -1,4 +1,6 @@
 
+#pragma once 
+
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/io_context.hpp>
@@ -16,6 +18,7 @@
 
 #include "../index/index.hpp"
 #include "../store/store.hpp"
+#include "../store/buffer.hpp"
 
 
 namespace beast = boost::beast;
@@ -29,9 +32,11 @@ class S3HttpServer {
             std::string address,
             unsigned short port, 
             std::string dir, 
-            Store* store
+            Store* store,
+            bool use_spdk
         )
             : store_(store)
+            , use_spdk_(use_spdk)
         {
             auto const addr = asio::ip::make_address(address);
             endpoint = {addr, port};
@@ -57,7 +62,7 @@ class S3HttpServer {
         asio::awaitable<void> do_session(beast::tcp_stream stream);
         asio::awaitable<http::message_generator> handle_request(
             http::request<http::buffer_body>&& req, 
-            std::shared_ptr<std::vector<uint8_t>> session_buffer);
+            std::shared_ptr<session_buffer> session_buffer);
 
         void sanitize_target_path(std::string& target);
         bool parse_aws_params(std::string_view t, std::unordered_map<std::string, std::string>& aws_params);
@@ -67,16 +72,24 @@ class S3HttpServer {
 
         asio::awaitable<http::message_generator> handle_get_object(beast::string_view object, 
             http::request<http::buffer_body>&& req, 
-            std::shared_ptr<std::vector<uint8_t>> session_buffer);
+            std::shared_ptr<session_buffer> session_buffer);
         asio::awaitable<http::message_generator> handle_head_object(beast::string_view object, 
             http::request<http::buffer_body>&& req);
         asio::awaitable<http::message_generator> handle_list_objects(beast::string_view prefix, 
             http::request<http::buffer_body>&& req, 
-            std::shared_ptr<std::vector<uint8_t>> session_buffer);
+            std::shared_ptr<session_buffer> session_buffer);
         asio::awaitable<http::message_generator> handle_put_object(beast::string_view object, 
             http::request<http::buffer_body>&& req);
 
         http::message_generator not_found_bucket_res(beast::string_view bucket, http::request<http::buffer_body>&& req);
         http::message_generator not_found_key_res(beast::string_view object, http::request<http::buffer_body>&& req);
 
+        std::shared_ptr<session_buffer> make_buffer(size_t size) {
+            if (use_spdk_)
+                return std::make_shared<spdk_buffer>(size);
+            else
+                return std::make_shared<vector_buffer>(size);
+        }
+
+        bool use_spdk_;
 };
