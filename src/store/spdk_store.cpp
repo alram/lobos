@@ -73,7 +73,7 @@ void SpdkStore::init_store(std::string devSpec) {
     std::unique_ptr<BlobStoreInitializer> dev;
     if (devSpec == "malloc") {
         std::cout << "Passed a malloc device." << std::endl;
-        dev = std::make_unique<MallocBSInitializer>();
+        dev = std::make_unique<MallocBSInitializer>(conf_);
     } 
     else {
         // check the dev name is apt.
@@ -82,7 +82,7 @@ void SpdkStore::init_store(std::string devSpec) {
             throw std::runtime_error("Device not supported or does not exist: " + devSpec + ". Make sure to pass a valid PCI addr.");
         }
         std::cout << "Passed a NVMe device." << std::endl;
-        dev = std::make_unique<NvmeBSInitializer>(devSpec);
+        dev = std::make_unique<NvmeBSInitializer>(devSpec, conf_);
     }
     
     spdk_blob_store* bs = dev->initialize(spdk_reactor_->get_thread());

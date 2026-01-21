@@ -141,10 +141,10 @@ int main(int argc, char **argv) {
         };
         spdk_reactor = std::make_unique<SpdkReactor>(conf);
 
-        SpdkConfig spdk_conf = {
+        BlobStoreConfig blobs_conf = {
             vm["spdk_blobstore.cluster_sz"].as<uint32_t>(),
         };
-        store = std::make_unique<SpdkStore>(spdk_reactor.get(), spdk_conf);
+        store = std::make_unique<SpdkStore>(spdk_reactor.get(), blobs_conf);
         store->init_store(vm["spdk_blobstore.device"].as<std::string>());
 
         //TODO remove this;

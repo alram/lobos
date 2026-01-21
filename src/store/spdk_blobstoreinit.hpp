@@ -16,6 +16,7 @@ struct BlobStoreContext {
     std::atomic<bool> shutdown_done{false};
     spdk_blob_store *bs = nullptr;
     spdk_bs_dev *bs_dev = nullptr;
+    BlobStoreConfig conf;
 
     std::function<void(std::function<void()>)> on_shutdown_request;
 };
@@ -26,9 +27,11 @@ class BlobStoreInitializer {
         virtual spdk_blob_store* initialize(spdk_thread* t) = 0;
         virtual std::shared_ptr<BlobStoreContext> get_context() { return ctx_; }
     protected:
-        explicit BlobStoreInitializer(std::shared_ptr<BlobStoreContext> ctx) 
-            : ctx_(std::move(ctx)) {}
+        explicit BlobStoreInitializer(std::shared_ptr<BlobStoreContext> ctx, BlobStoreConfig conf) 
+            : ctx_(std::move(ctx)) 
+            , conf_(conf) {}
         std::shared_ptr<BlobStoreContext> ctx_;
+        BlobStoreConfig conf_;
 };
 
 void send_rpc_req(const std::string& method, const std::string params) {
@@ -80,14 +83,15 @@ static void base_bdev_event_cb(enum spdk_bdev_event_type type, spdk_bdev *bdev, 
 // for testing (and CI if ever... lol)... send and pray
 class MallocBSInitializer : public BlobStoreInitializer {
     public:
-        MallocBSInitializer() 
-                : BlobStoreInitializer(std::make_shared<BlobStoreContext>()) {}
+        MallocBSInitializer(BlobStoreConfig conf) 
+                : BlobStoreInitializer(std::make_shared<BlobStoreContext>(), conf) {}
 
         spdk_blob_store* initialize(spdk_thread* t) override {
             std::string params = "{\"name\":\""+ std::string(LOBOS_BDEV_NAME) + "\",\"num_blocks\": 32768,\"block_size\":512}";
             send_rpc_req("bdev_malloc_create", params);
 
             BlobStoreContext* ctx_raw = ctx_.get();
+            ctx_->conf = conf_;
 
             auto run_on_spdk_thread = [](void *args) {
                 auto context = static_cast<BlobStoreContext*>(args);
@@ -100,7 +104,8 @@ class MallocBSInitializer : public BlobStoreInitializer {
 
                 spdk_bs_opts opts{};
                 spdk_bs_opts_init(&opts, sizeof(opts));
-                opts.cluster_sz = 131072;
+                if (context->conf.cluster_sz > 0)
+                    opts.cluster_sz = context->conf.cluster_sz;
 
                 spdk_bs_init(bs_dev, &opts, [](void *cb_args, spdk_blob_store* bs, int bserr) {
                     auto final_ctx = static_cast<BlobStoreContext*>(cb_args);
@@ -135,9 +140,9 @@ class NvmeBSInitializer : public BlobStoreInitializer {
 private:
     std::string pci_addr;
 public:
-    NvmeBSInitializer(std::string addr) 
-    : pci_addr(addr)
-    , BlobStoreInitializer(std::make_shared<BlobStoreContext>()) 
+    NvmeBSInitializer(std::string addr, BlobStoreConfig conf) 
+    : BlobStoreInitializer(std::make_shared<BlobStoreContext>(), conf) 
+    , pci_addr(addr)
     {}
 
     spdk_blob_store* initialize(spdk_thread* t) override {
@@ -150,6 +155,7 @@ public:
         // Now that we have a bdev, we can try to load blobstore and if it fails just
         // create it
         BlobStoreContext* ctx_raw = ctx_.get();
+        ctx_->conf = conf_;
 
         auto run_on_spdk_thread = [](void* args) {
             auto context = static_cast<BlobStoreContext*>(args);
@@ -163,7 +169,8 @@ public:
 
             spdk_bs_opts opts{};
             spdk_bs_opts_init(&opts, sizeof(opts));
-            opts.cluster_sz = 131072;
+            if (context->conf.cluster_sz > 0)
+                opts.cluster_sz = context->conf.cluster_sz;
 
             spdk_bs_load(bs_dev, &opts, [](void *cb_args, spdk_blob_store* bs, int bserr) {
                 auto ctx = static_cast<BlobStoreContext*>(cb_args);
@@ -175,7 +182,8 @@ public:
                     std::cout << "didn't find existing blobstore, creating one" << std::endl;
                     spdk_bs_opts opts{};
                     spdk_bs_opts_init(&opts, sizeof(opts));
-                    opts.cluster_sz = 131072;
+                    if (ctx->conf.cluster_sz > 0)
+                            opts.cluster_sz = ctx->conf.cluster_sz;
 
                     // since load failed, the previous bs_dev got freed
                     spdk_bs_dev* bs_dev = nullptr;

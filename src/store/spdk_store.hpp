@@ -44,8 +44,8 @@ public:
                 opts.print_level = SPDK_LOG_DEBUG;
             if (conf.intr_mode)
                 opts.interrupt_mode = conf.intr_mode;
-            // TODO set reactor core from config
-
+            if (conf.reactor_core)
+                opts.lcore_map = std::to_string(conf.reactor_core).c_str();
             spdk_app_start(&opts, [](void* arg) {
                 auto self = static_cast<SpdkReactor*>(arg);
                 self->t = spdk_get_thread();
@@ -98,14 +98,14 @@ struct IoCtx {
     {}
 };
 
-struct SpdkConfig {
-    uint32_t cluster_sz;
+struct BlobStoreConfig {
+    size_t cluster_sz;
 };
 
 class SpdkStore : public Store {
 public:
-    explicit SpdkStore(SpdkReactor* spdk_reactor, SpdkConfig c) : spdk_reactor_(spdk_reactor) {
-        conf = c;
+    explicit SpdkStore(SpdkReactor* spdk_reactor, BlobStoreConfig c) : spdk_reactor_(spdk_reactor) {
+        conf_ = c;
     };
 
     void init_store(std::string devSpec) override;
@@ -128,7 +128,7 @@ private:
     uint64_t free_clusters_;
     SpdkReactor* spdk_reactor_;
     std::unique_ptr<IndexStore> index_ = nullptr;
-    SpdkConfig conf;
+    BlobStoreConfig conf_;
     std::atomic<bool> index_ready = false;
     std::atomic<bool> store_ready = false;
 };
