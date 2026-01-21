@@ -26,48 +26,6 @@ extern "C" {
 
 namespace asio = boost::asio;
 
-struct SpdkAwaiter {
-    int rc = 0;
-    void* result = nullptr;
-    std::coroutine_handle<> h;
-
-    bool await_ready() const noexcept { return false; }
-
-    void await_suspend(std::coroutine_handle<> handle) {
-        h = handle;
-    }
-    
-    auto await_resume() {
-        return std::make_pair(rc, result);
-    }
-
-    void complete(int r, void* res = nullptr) {
-        rc = r;
-        result = res;
-        h.resume();
-    }
-};
-
-class Task {
-    public:
-        struct promise_type {
-            // int value;
-            std::exception_ptr error;
-
-            Task get_return_object() {
-                return Task{std::coroutine_handle<promise_type>::from_promise(*this)};
-            }
-
-            std::suspend_never initial_suspend() { return {}; }
-            std::suspend_never final_suspend() noexcept { return {}; }
-
-            // void return_value(T v) { value = std::move(v); }
-            void return_void() {}
-            void unhandled_exception() { error = std::current_exception(); }
-        };
-        std::coroutine_handle<promise_type> h;
-};
-
 struct SpdkReactorConf {
     std::string log_level;
     bool intr_mode;
