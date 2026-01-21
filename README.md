@@ -51,8 +51,8 @@ Command Line Options:
 Lobos require a configuration file. That looks like:
 ```ini
 [entry]
-backend=spdk_blobstore          # other accepted: filesystem
-# backend=filesystem
+# backend=spdk_blobstore          # other accepted: filesystem
+backend=filesystem
 port=8080                       # port lobos listens on
 http_threads = 8                # numbers of beast threasd
 # Pin beast threads to CPU cores:
@@ -69,10 +69,10 @@ directory=/mnt/lobos                  # if in filesystem mode, this will use thi
 # with malloc a 16MiB malloc bdev will be created
 device=0000:c1:00.0
 # device = malloc 
-cluster_sz = 131072             # (Not impl)
+cluster_sz = 32768             # see: https://spdk.io/doc/blob.html - this is v. important
 log_level = debug               # debug/none supported only currently
-reactor_core = 0                # (Not impl) SPDK pins its thread to a CPU core
-# SPDK polls by default, it can be switched to interrupt
+reactor_core = 0                # SPDK pins its thread to a CPU core
+# SPDK polls by defaut, it can be switched to interrupt
 # mode, it's particularly to avoid spinning the CPU 
 # during dev/testing. For max performance do not set.
 # interrupt_mode=true
@@ -179,23 +179,25 @@ Starting S3 HTTP server for bucket lobos at 127.0.0.1:8080
 
 This was tested on a framework desktop (AMD RYZEN AI MAX+ 395) with 32GB of OS RAM. 
 Minio's wrap was used for the testing. For each test, I used 8 http threads, pinned to core 1-8 for the SPDK blobstore test, core 0 was used for the reactor.
-All tests were performed on a `WD_BLACK SN7100 500GB` with the following [factory specs](https://shop.sandisk.com/products/ssd/internal-ssd/wd-black-sn7100-nvme-internal-ssd?sku=WDS100T4X0E-00CJA0)
+All tests were performed on a `WD_BLACK SN7100 500GB` with a `cluster_sz` of 32KiB. A large cluster size, will help performance on large IO (reached ~5GB/s reads and 4GiB/s peak writes) but will waste a lot of space on small IO. If you know your object size, I highly encourage tweaking `cluster_sz` accordingly.
 
 |Engine| IO Size | Concurrency | Method | Result |
 |------|---------|---------|--------|--------|
 | File | 1 MiB | 50 | PUT | 2432.04 MiB/s |
 | File | 1 MiB | 50 | GET | 13711.60 MiB/s* |
-| SPDK | 1 MiB | 50 | PUT | 3066.46 MiB/s** |
-| SPDK | 1 MiB | 50 | GET | 5033.71 MiB/s |
-| File | 32KiB |  | PUT | TODO |
-| File | 32KiB |  | GET | TODO |
-| SPDK | 32KiB |  | PUT | TODO |
-| SPDK | 32KiB |  | GET | TODO |
+| SPDK | 1 MiB | 50 | PUT | 3466.46 MiB/s** |
+| SPDK | 1 MiB | 50 | GET | 4274.65 MiB/s |
+| File | 32KiB | 200 | PUT | 10738 op/s - 335.56 MiB/s |
+| File | 32KiB | 200 | GET | 84621 op/s - 2644 MiB/s* |
+| SPDK | 32KiB | 200 | PUT | TODO |
+| SPDK | 32KiB | 200 | GET | 83463 op/s - 2608.22 MiB/s*** |
 
 
-\* This obviously hit the cache a _lot_ since it's above the factory specs however it's a good indicator that performance would be disk perf bound.
+\* The GET filesystem result were (almost) all cached. Little to no disk I/O were observed.
 
-** Performance degraded quick starting at 4392.9MiB/s and getting lower from there something I need to look at
+** Performance degraded after ~30 seconds and lowered to ~900MiB/s. This is a consummer drive and I basically hit the write cliff, fast. This was confirmed by 1) running the benchmarking immediately after end, which showed 900MiB/s 2) letting the drive idle for 1h and re-running the benchmark showed the init performance and degraded a few seconds later again. The performance number showed above is pre-cliff.
+
+*** For GET 32KiB test, the busiest processes were warp's, not lobos, as evident by the same numbers for the two backends.
 
 Note on SPDK performance: There's unnecessary memcpy, something I'm actively working to change. Performance numbers will be updated once done.
 
