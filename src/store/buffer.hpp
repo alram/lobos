@@ -39,92 +39,92 @@ public:
 
 
 class spdk_buffer : public session_buffer {
-    public:
-        explicit spdk_buffer(size_t size)
-            : size_(size)
-            , cap_(size)
-            , data_(size > 0 
-                ? static_cast<uint8_t*>(spdk_malloc(size, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA))
-                : nullptr)        
-        {
-            if (!data_ && size > 0)
-                throw std::bad_alloc();
-        }
+public:
+    explicit spdk_buffer(size_t size)
+        : size_(size)
+        , cap_(size)
+        , data_(size > 0 
+            ? static_cast<uint8_t*>(spdk_malloc(size, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA))
+            : nullptr)
+    {
+        if (!data_ && size > 0)
+            throw std::bad_alloc();
+    }
 
-        ~spdk_buffer() {
-            if (data_)
-                spdk_free(data_);
-        }
+    ~spdk_buffer() {
+        if (data_)
+            spdk_free(data_);
+    }
 
-        // Non-copyable
-        spdk_buffer(const spdk_buffer&) = delete;
-        spdk_buffer& operator=(const spdk_buffer&) = delete;
+    // Non-copyable
+    spdk_buffer(const spdk_buffer&) = delete;
+    spdk_buffer& operator=(const spdk_buffer&) = delete;
 
-        //Move
-        spdk_buffer(spdk_buffer&& other) noexcept
-            : size_(other.size_)
-            , data_(other.data_)
-        {
-            other.size_ = 0;
-            other.data_ = nullptr;
-        }
+    //Move
+    spdk_buffer(spdk_buffer&& other) noexcept
+        : size_(other.size_)
+        , data_(other.data_)
+    {
+        other.size_ = 0;
+        other.data_ = nullptr;
+    }
 
-        spdk_buffer& operator=(spdk_buffer&& other) noexcept {
-            if (this != &other) {
-                if (data_) spdk_free(data_);
-                data_ = other.data_;
-                size_ = other.size_;
-                other.data_ = nullptr;
-                other.size_ = 0;
-            }
-            return *this;
-        }
-
-        uint8_t* data() override { return data_; }
-        const uint8_t* data() const override { return data_; }
-        size_t size() const override { return size_; }
-        std::span<uint8_t> span() { return {data_, size_}; }
-        std::span<const uint8_t> span() const { return {data_, size_}; }
-        
-        void resize(size_t n_size) {
-            if (n_size == size_) return;
-            uint8_t* n_data = nullptr;
-            if (n_size > 0) {
-                n_data = static_cast<uint8_t*>(spdk_malloc(n_size, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA));
-                if (!n_data)
-                    throw std::bad_alloc();
-                if(data_)
-                    memcpy(n_data, data_, std::min(size_, n_size));
-            }
+    spdk_buffer& operator=(spdk_buffer&& other) noexcept {
+        if (this != &other) {
             if (data_) spdk_free(data_);
-            data_ = n_data;
-            size_ = n_size;
+            data_ = other.data_;
+            size_ = other.size_;
+            other.data_ = nullptr;
+            other.size_ = 0;
+        }
+        return *this;
+    }
+
+    uint8_t* data() override { return data_; }
+    const uint8_t* data() const override { return data_; }
+    size_t size() const override { return size_; }
+    std::span<uint8_t> span() { return {data_, size_}; }
+    std::span<const uint8_t> span() const { return {data_, size_}; }
+
+    void resize(size_t n_size) {
+        if (n_size == size_) return;
+        uint8_t* n_data = nullptr;
+        if (n_size > 0) {
+            n_data = static_cast<uint8_t*>(spdk_malloc(n_size, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA));
+            if (!n_data)
+                throw std::bad_alloc();
+            if(data_)
+                memcpy(n_data, data_, std::min(size_, n_size));
+        }
+        if (data_) spdk_free(data_);
+        data_ = n_data;
+        size_ = n_size;
+    }
+
+    void reserve(size_t cap) {
+        if (cap <= cap_) return;
+        uint8_t* new_data = static_cast<uint8_t*>(
+            spdk_malloc(cap, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA));
+        if (!new_data) throw std::bad_alloc();
+        
+        if (data_) {
+            if (size_ > 0) std::memcpy(new_data, data_, size_);
+            spdk_free(data_);
         }
 
-        void reserve(size_t cap) {
-            if (cap <= cap_) return;
-            uint8_t* new_data = static_cast<uint8_t*>(
-                spdk_malloc(cap, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA));
-            if (!new_data) throw std::bad_alloc();
-            
-            if (data_) {
-                if (size_ > 0) std::memcpy(new_data, data_, size_);
-                spdk_free(data_);
-            }
-            
-            data_ = new_data;
-            cap_ = cap;
-        }
+        data_ = new_data;
+        cap_ = cap;
+    }
 
-        void append(const uint8_t* data, size_t len) override {
-            size_t old_size = size_;
-            if ((old_size + len) > size_)
-                resize(old_size+len);
-            memcpy(data_ + old_size, data, len);
-        }
+    void append(const uint8_t* data, size_t len) override {
+        size_t old_size = size_;
+        if ((old_size + len) > size_)
+            resize(old_size+len);
+        memcpy(data_ + old_size, data, len);
+    }
 
-    private:
-        size_t size_;
-        size_t cap_;
-        uint8_t* data_;
+private:
+    size_t size_;
+    size_t cap_;
+    uint8_t* data_;
 };

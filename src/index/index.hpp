@@ -13,12 +13,12 @@ struct Object {
 };
 
 class IndexStore {
-    public:
-        IndexStore() {};
-        ~IndexStore() {};
-        std::map<std::string, Object, std::less<>> index;
-        
-        // This implementation is just a quick thingy
-        // this will need to move to a better one eventually
-        void add_entry(std::string object, Object o);
+public:
+    IndexStore() {};
+    ~IndexStore() {};
+    std::map<std::string, Object, std::less<>> index;
+
+    // This implementation is just a quick thingy
+    // this will need to move to a better one eventually
+    void add_entry(std::string object, Object o);
 };

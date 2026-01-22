@@ -59,50 +59,50 @@ static void base_bdev_event_cb(enum spdk_bdev_event_type type, spdk_bdev *bdev, 
 // We keep that shit raw for Malloc since it's really only
 // for testing (and CI if ever... lol)... send and pray
 class MallocBSInitializer : public BlobStoreInitializer {
-    public:
-        MallocBSInitializer(BlobStoreConfig conf) 
-                : BlobStoreInitializer(std::make_shared<BlobStoreContext>(), conf) {}
+public:
+    MallocBSInitializer(BlobStoreConfig conf)
+            : BlobStoreInitializer(std::make_shared<BlobStoreContext>(), conf) {}
 
-        spdk_blob_store* initialize(spdk_thread* t) override {
-            std::string params = "{\"name\":\""+ std::string(LOBOS_BDEV_NAME) + "\",\"num_blocks\": 32768,\"block_size\":512}";
-            send_rpc_req("bdev_malloc_create", params);
+    spdk_blob_store* initialize(spdk_thread* t) override {
+        std::string params = "{\"name\":\""+ std::string(LOBOS_BDEV_NAME) + "\",\"num_blocks\": 32768,\"block_size\":512}";
+        send_rpc_req("bdev_malloc_create", params);
 
-            BlobStoreContext* ctx_raw = ctx_.get();
-            ctx_->conf = conf_;
+        BlobStoreContext* ctx_raw = ctx_.get();
+        ctx_->conf = conf_;
 
-            auto run_on_spdk_thread = [](void *args) {
-                auto context = static_cast<BlobStoreContext*>(args);
-                spdk_bs_dev* bs_dev = nullptr;
-                int rc = spdk_bdev_create_bs_dev_ext(LOBOS_BDEV_NAME, base_bdev_event_cb, context, &bs_dev);
-                if (rc !=0) {
-                    context->init_done = true;
-                    return;
-                }
-
-                spdk_bs_opts opts{};
-                spdk_bs_opts_init(&opts, sizeof(opts));
-                if (context->conf.cluster_sz > 0)
-                    opts.cluster_sz = context->conf.cluster_sz;
-
-                spdk_bs_init(bs_dev, &opts, [](void *cb_args, spdk_blob_store* bs, int bserr) {
-                    auto final_ctx = static_cast<BlobStoreContext*>(cb_args);
-                    if (bserr == 0) {
-                        final_ctx->bs = bs;
-                    } else {
-                        std::cerr << "Blobstore init failed with error: " << bserr << std::endl;
-                    }
-                    final_ctx->init_done = true; // Signal the main thread
-                }, args);
-            };
-            
-            spdk_thread_send_msg(t, run_on_spdk_thread, ctx_raw);
-
-            while(!ctx_->init_done) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        auto run_on_spdk_thread = [](void *args) {
+            auto context = static_cast<BlobStoreContext*>(args);
+            spdk_bs_dev* bs_dev = nullptr;
+            int rc = spdk_bdev_create_bs_dev_ext(LOBOS_BDEV_NAME, base_bdev_event_cb, context, &bs_dev);
+            if (rc !=0) {
+                context->init_done = true;
+                return;
             }
 
-            return ctx_->bs;
+            spdk_bs_opts opts{};
+            spdk_bs_opts_init(&opts, sizeof(opts));
+            if (context->conf.cluster_sz > 0)
+                opts.cluster_sz = context->conf.cluster_sz;
+
+            spdk_bs_init(bs_dev, &opts, [](void *cb_args, spdk_blob_store* bs, int bserr) {
+                auto final_ctx = static_cast<BlobStoreContext*>(cb_args);
+                if (bserr == 0) {
+                    final_ctx->bs = bs;
+                } else {
+                    std::cerr << "Blobstore init failed with error: " << bserr << std::endl;
+                }
+                final_ctx->init_done = true; // Signal the main thread
+            }, args);
+        };
+
+        spdk_thread_send_msg(t, run_on_spdk_thread, ctx_raw);
+
+        while(!ctx_->init_done) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
+
+        return ctx_->bs;
+    }
 
 };
 

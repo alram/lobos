@@ -394,10 +394,6 @@ void SpdkStore::start_stats_engine() {
 }
 
 void SpdkStore::lock_store_if_full() {
-    std::cout << "total clusters: " << stats_->total_clusters  << " - avail clusters: " << stats_->available_clusters << std::endl;
     float used = stats_->total_clusters - stats_->available_clusters;
-    std::cout << "used pct: " << (used / stats_->total_clusters) * 100 << std::endl;
-
-
     read_only = (used *100 / stats_->total_clusters) >= conf_.max_use_pct ? true : false;
 }

@@ -122,15 +122,6 @@ public:
     asio::awaitable<bool> do_delete(std::string_view o) override;
     asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string_view o) override;
     asio::awaitable<void> do_list(std::string_view prefix, session_buffer& buffer) override;
-    
-    void build_index_at_boot();
-    static void iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno);
-    static void get_blob_metadata(spdk_blob* blob, Object* o, const char*& key);
-    void do_delete_async(spdk_blob_id blobid);
-
-    void start_stats_engine();
-    void update_stats();
-    void lock_store_if_full();
     void shutdown_store() override;
 
     ~SpdkStore() {}
@@ -152,12 +143,19 @@ private:
     std::atomic<bool> run_stats_engine_ = true;
     std::atomic<bool> stats_updating = false;
     bool read_only = false;
-
+    void start_stats_engine();
+    void update_stats();
+    void lock_store_if_full();
     void shutdown_stats_engine() {
         run_stats_engine_ = false;
         if (stats_t_.joinable())
             stats_t_.join();
     }
+
+    void build_index_at_boot();
+    static void iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno);
+    static void get_blob_metadata(spdk_blob* blob, Object* o, const char*& key);
+    void do_delete_async(spdk_blob_id blobid);
 };
 
 struct BlobOpCtx {
