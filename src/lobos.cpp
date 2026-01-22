@@ -91,7 +91,8 @@ int main(int argc, char **argv) {
             ("spdk_blobstore.cluster_sz", po::value<uint32_t>()->default_value(131072))
             ("spdk_blobstore.log_level", po::value<std::string>()->default_value(""))
             ("spdk_blobstore.reactor_core", po::value<int>()->default_value(8))
-            ("spdk_blobstore.interrupt_mode", po::value<bool>()->default_value(false));
+            ("spdk_blobstore.interrupt_mode", po::value<bool>()->default_value(false))
+            ("spdk_blobstore.max_use_pct", po::value<uint64_t>()->default_value(95));
     
     po::variables_map vm;
 
@@ -143,6 +144,7 @@ int main(int argc, char **argv) {
 
         BlobStoreConfig blobs_conf = {
             vm["spdk_blobstore.cluster_sz"].as<uint32_t>(),
+            vm["spdk_blobstore.max_use_pct"].as<uint64_t>(),
         };
         store = std::make_unique<SpdkStore>(spdk_reactor.get(), blobs_conf);
         store->init_store(vm["spdk_blobstore.device"].as<std::string>());

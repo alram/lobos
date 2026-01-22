@@ -100,16 +100,24 @@ struct IoCtx {
 
 struct BlobStoreConfig {
     size_t cluster_sz;
+    uint64_t max_use_pct;
 };
+
+struct SpdkBSStats {
+    uint64_t total_clusters;
+    uint64_t available_clusters;
+};
+
 
 class SpdkStore : public Store {
 public:
     explicit SpdkStore(SpdkReactor* spdk_reactor, BlobStoreConfig c) : spdk_reactor_(spdk_reactor) {
         conf_ = c;
+        stats_ = std::make_unique<SpdkBSStats>();
     };
 
     void init_store(std::string devSpec) override;
-    asio::awaitable<size_t> do_write(std::string o, session_buffer& buffer) override;
+    asio::awaitable<int> do_write(std::string o, session_buffer& buffer) override;
     asio::awaitable<int> do_read(std::string o, uint64_t offset, session_buffer& buffer) override;
     asio::awaitable<bool> do_delete(std::string_view o) override;
     void shutdown_store() override { shutdown_blobstore(); };
@@ -122,16 +130,33 @@ public:
     static void get_blob_metadata(spdk_blob* blob, Object* o, const char*& key);
     void do_delete_async(spdk_blob_id blobid);
 
+    void start_stats_engine();
+    void update_stats();
+    void lock_store_if_full();
+
+    ~SpdkStore() {
+        run_stats_engine_ = false;
+        if (stats_t_.joinable())
+            stats_t_.join();
+    }
+
 private:
+    SpdkReactor* spdk_reactor_;
+    
     spdk_blob_store* bs_ = nullptr;
     spdk_io_channel* io_channel_ = nullptr;
     uint64_t io_unit_size_;
-    uint64_t free_clusters_;
-    SpdkReactor* spdk_reactor_;
     std::unique_ptr<IndexStore> index_ = nullptr;
+
     BlobStoreConfig conf_;
     std::atomic<bool> index_ready = false;
     std::atomic<bool> store_ready = false;
+
+    std::unique_ptr<SpdkBSStats> stats_;
+    std::thread stats_t_;
+    std::atomic<bool> run_stats_engine_ = true;
+    std::atomic<bool> stats_updating = false;
+    bool read_only = false;
 };
 
 struct BlobOpCtx {

@@ -9,7 +9,7 @@ namespace beast = boost::beast;
 namespace asio = boost::asio;
 namespace fs = boost::filesystem;
 
-asio::awaitable<size_t> FsStore::do_write(std::string o, session_buffer& buffer) {
+asio::awaitable<int> FsStore::do_write(std::string o, session_buffer& buffer) {
     create_dest_dirs_if_not_exist(o);
     // We always overwrite since it's an object
     int flags = O_WRONLY | O_CREAT | O_TRUNC;

@@ -76,6 +76,7 @@ reactor_core = 0                # SPDK pins its thread to a CPU core
 # mode, it's particularly to avoid spinning the CPU 
 # during dev/testing. For max performance do not set.
 # interrupt_mode=true
+max_use_pct=95                 # Lobos will go read only if usage goes above 95%
 ```
 Pinning and threads configuration is not required but recommended if you want the highest performance (and avoid SMT cores if possible).
 

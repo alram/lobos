@@ -7,6 +7,8 @@
 #define BLOB_META_NAME "metadata"
 #define BLOB_META_KEY "key"
 
+#define SPDK_STATS_UPDATE_INTERVAL_SEC 2
+
 void SpdkStore::shutdown_blobstore() {
     std::cout << "shutting down blobstore" << std::endl;
     auto ctx = static_cast<SpdkStore*>(this);
@@ -20,7 +22,6 @@ void SpdkStore::shutdown_blobstore() {
         }, ctx);
     };
     spdk_thread_send_msg(spdk_reactor_->get_thread(), unload_blobstore, &ctx);
-
     while (store_ready) {
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
@@ -101,7 +102,6 @@ void SpdkStore::init_store(std::string devSpec) {
     }
     
     spdk_blob_store* bs = dev->initialize(spdk_reactor_->get_thread());
-
     if (!bs) throw std::runtime_error("Failed to initialize blobstore");
 
     bs_ = bs;
@@ -110,6 +110,8 @@ void SpdkStore::init_store(std::string devSpec) {
         auto ctx = static_cast<SpdkStore*>(args);
         ctx->io_channel_ = spdk_bs_alloc_io_channel(ctx->bs_);
         ctx->io_unit_size_ = spdk_bs_get_io_unit_size(ctx->bs_);
+        ctx->stats_->total_clusters = spdk_bs_total_data_cluster_count(ctx->bs_);
+        ctx->stats_->available_clusters = spdk_bs_free_cluster_count(ctx->bs_);
     };
 
     auto ctx = static_cast<SpdkStore*>(this);
@@ -118,8 +120,12 @@ void SpdkStore::init_store(std::string devSpec) {
     while(!ctx->io_unit_size_ || !ctx->io_channel_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
+    std::cout << "avail clusters: " << ctx->stats_->available_clusters << std::endl;
+    std::cout << "total_clusters clusters: " << ctx->stats_->total_clusters << std::endl;
 
-    std::cout << "alloc done! io unit size: " << io_unit_size_ << std::endl;
+    // Collects usage stats and perf information
+    start_stats_engine();
+
     store_ready = true;
 
     // start the in-memory index.
@@ -168,7 +174,12 @@ asio::awaitable<void> SpdkStore::do_list(std::string_view prefix, session_buffer
     co_return;
 }
 
-asio::awaitable<size_t> SpdkStore::do_write(std::string o, session_buffer& buffer) {
+asio::awaitable<int> SpdkStore::do_write(std::string o, session_buffer& buffer) {
+
+    if(read_only) {
+        std::cerr << "Backend is full rejecting write" <<std::endl;
+        co_return -ENOSPC;
+    }
 
     spdk_blob_id old_blob_id = 0;
     
@@ -355,3 +366,31 @@ void SpdkStore::get_blob_metadata(spdk_blob* blob, Object* o, const char*& key) 
     }
 }
 
+void SpdkStore::update_stats() {
+    auto ctx = static_cast<SpdkStore*>(this);
+    auto run_in_spdk = [](void* arg) {
+        auto ctx = static_cast<SpdkStore*>(arg);
+        // TODO other stats there (iops/bw)
+        ctx->stats_->available_clusters = spdk_bs_free_cluster_count(ctx->bs_);
+        ctx->stats_updating = false;
+    };
+    stats_updating = true;
+    spdk_thread_send_msg(spdk_reactor_->get_thread(), run_in_spdk, ctx);
+    while(stats_updating) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    lock_store_if_full();
+}
+
+void SpdkStore::start_stats_engine() {
+    stats_t_ = std::thread([this] {
+        while (run_stats_engine_) {
+            update_stats();
+            std::this_thread::sleep_for(std::chrono::seconds(SPDK_STATS_UPDATE_INTERVAL_SEC));
+        }
+    });
+}
+
+void SpdkStore::lock_store_if_full() {
+    read_only = (stats_->total_clusters - stats_->available_clusters  >= conf_.max_use_pct) ? true : false;
+}

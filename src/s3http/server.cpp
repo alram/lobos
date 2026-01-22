@@ -288,7 +288,14 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
     }
 
     if (req.method() == http::verb::put) {
-        co_await store_->do_write(target, *session_buffer);
+        auto ret = co_await store_->do_write(target, *session_buffer);
+        if (ret < 0) {
+            http::response<http::string_body> res{http::status::service_unavailable, req.version()};
+            res.set(http::field::server, SERVER_NAME);
+            res.keep_alive(req.keep_alive());
+            res.prepare_payload();
+            co_return res;
+        } 
         http::response<http::string_body> res{http::status::ok, req.version()};
         res.set(http::field::server, SERVER_NAME);
         res.insert("x-amz-object-size", std::to_string(req.body().size));
