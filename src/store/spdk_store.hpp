@@ -120,6 +120,7 @@ public:
     void build_index_at_boot();
     static void iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno);
     static void get_blob_metadata(spdk_blob* blob, Object* o, const char*& key);
+    void do_delete_async(spdk_blob_id blobid);
 
 private:
     spdk_blob_store* bs_ = nullptr;
