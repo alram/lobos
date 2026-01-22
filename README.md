@@ -200,8 +200,6 @@ The 32KiB tests showed the same pattern although less pronounced, starting at 51
 
 *** For GET 32KiB test, the busiest processes were warp's, not lobos', as evident by the same numbers for the two backends.
 
-Note on SPDK performance: There's unnecessary memcpy, something I'm actively working to change. Performance numbers will be updated once done.
-
 ## LMCache
 
 I don't have an environment where I can easily test this but functionally it seems to work.
