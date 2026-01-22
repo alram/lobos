@@ -13,19 +13,16 @@
 
 struct BlobStoreContext {
     std::atomic<bool> init_done{false};
-    std::atomic<bool> shutdown_done{false};
     spdk_blob_store *bs = nullptr;
     spdk_bs_dev *bs_dev = nullptr;
     BlobStoreConfig conf;
 
-    std::function<void(std::function<void()>)> on_shutdown_request;
 };
 
 class BlobStoreInitializer {
     public:
         virtual ~BlobStoreInitializer() = default;
         virtual spdk_blob_store* initialize(spdk_thread* t) = 0;
-        virtual std::shared_ptr<BlobStoreContext> get_context() { return ctx_; }
     protected:
         explicit BlobStoreInitializer(std::shared_ptr<BlobStoreContext> ctx, BlobStoreConfig conf) 
             : ctx_(std::move(ctx)) 
@@ -56,27 +53,7 @@ void send_rpc_req(const std::string& method, const std::string params) {
 }  
 
 static void base_bdev_event_cb(enum spdk_bdev_event_type type, spdk_bdev *bdev, void *event_ctx) {
-    std::cout << "base_bdev_event_cb triggered" << std::endl;
-    auto ctx = static_cast<BlobStoreContext*>(event_ctx);
-
-    if (type == SPDK_BDEV_EVENT_REMOVE) {
-        std::cout << "caught SPDK_BDEV_EVENT_REMOVE" << std::endl;
-
-        if (!ctx->bs) {
-            // we can't shutdown anything
-            std::cout << "blobstore not available, marking shutdown done" << std::endl;
-            ctx->shutdown_done = true;
-            return;
-        }
-
-        spdk_bs_unload(ctx->bs, [](void *cb_arg, int bserrno) {
-            std::cout << "spdk bs unload: " << bserrno << std::endl;
-            auto ctx = static_cast<BlobStoreContext*>(cb_arg);
-            ctx->bs = nullptr;
-            ctx->shutdown_done = true;
-            return;
-        }, ctx);
-    }
+    std::cerr << "Received but not doing anything with it" << type << std::endl;
 }
 
 // We keep that shit raw for Malloc since it's really only
@@ -120,7 +97,6 @@ class MallocBSInitializer : public BlobStoreInitializer {
             
             spdk_thread_send_msg(t, run_on_spdk_thread, ctx_raw);
 
-            // just wait in a loop; could do an awaiter but :shrug: it's all in the init path who cares
             while(!ctx_->init_done) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }

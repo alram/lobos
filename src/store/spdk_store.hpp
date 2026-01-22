@@ -57,7 +57,7 @@ public:
 
     ~SpdkReactor() {}
 
-    void stop() { 
+    void stop() {
         spdk_app_stop(0);
     }
 
@@ -120,11 +120,9 @@ public:
     asio::awaitable<int> do_write(std::string o, session_buffer& buffer) override;
     asio::awaitable<int> do_read(std::string o, uint64_t offset, session_buffer& buffer) override;
     asio::awaitable<bool> do_delete(std::string_view o) override;
-    void shutdown_store() override { shutdown_blobstore(); };
     asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string_view o) override;
     asio::awaitable<void> do_list(std::string_view prefix, session_buffer& buffer) override;
     
-    void shutdown_blobstore();
     void build_index_at_boot();
     static void iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno);
     static void get_blob_metadata(spdk_blob* blob, Object* o, const char*& key);
@@ -133,12 +131,9 @@ public:
     void start_stats_engine();
     void update_stats();
     void lock_store_if_full();
+    void shutdown_store() override;
 
-    ~SpdkStore() {
-        run_stats_engine_ = false;
-        if (stats_t_.joinable())
-            stats_t_.join();
-    }
+    ~SpdkStore() {}
 
 private:
     SpdkReactor* spdk_reactor_;
@@ -150,13 +145,19 @@ private:
 
     BlobStoreConfig conf_;
     std::atomic<bool> index_ready = false;
-    std::atomic<bool> store_ready = false;
+    std::atomic<bool> store_shutdown = false;
 
     std::unique_ptr<SpdkBSStats> stats_;
     std::thread stats_t_;
     std::atomic<bool> run_stats_engine_ = true;
     std::atomic<bool> stats_updating = false;
     bool read_only = false;
+
+    void shutdown_stats_engine() {
+        run_stats_engine_ = false;
+        if (stats_t_.joinable())
+            stats_t_.join();
+    }
 };
 
 struct BlobOpCtx {

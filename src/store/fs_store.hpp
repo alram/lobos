@@ -15,10 +15,9 @@ class FsStore : public Store {
     asio::awaitable<int> do_write(std::string o, session_buffer& buffer) override;
     asio::awaitable<int> do_read(std::string o, uint64_t offset, session_buffer& buffer) override;
     asio::awaitable<bool> do_delete(std::string_view o) override;
-    void shutdown_store() override {}; //nothing to do here
     asio::awaitable<void> do_list(std::string_view prefix, session_buffer& buffer) override;
-
     asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string_view o) override;
+    void shutdown_store() override {};
 
     static std::string create_dest_dirs_if_not_exist(std::string object);
 };

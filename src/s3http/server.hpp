@@ -9,6 +9,7 @@
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
 #include <boost/config.hpp>
+#include <boost/asio/signal_set.hpp>
 
 #include <cstdlib>
 #include <iostream>
@@ -52,7 +53,16 @@ class S3HttpServer {
         ~S3HttpServer() {}; 
 
         void start(int threads, std::vector<int> pins);
+        void stop() {
+            for (auto& ioc : ioctxs_) {
+                ioc->stop();
+            }
+        }
     private:
+        std::vector<std::unique_ptr<asio::io_context>> ioctxs_;
+        std::vector<std::thread> thread_pool_;
+        std::unique_ptr<asio::signal_set> signals_;
+
         Store* store_;
 
         asio::ip::tcp::endpoint endpoint;

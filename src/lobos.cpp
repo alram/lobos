@@ -184,12 +184,6 @@ int main(int argc, char **argv) {
 
     server.start(http_threads, pins);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    store->shutdown_store();
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    spdk_reactor->stop();
-    spdk_reactor->join();
-
     return 0;
 }
 

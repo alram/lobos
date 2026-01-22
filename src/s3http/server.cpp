@@ -416,23 +416,29 @@ asio::awaitable<void> S3HttpServer::do_listen(asio::ip::tcp::endpoint ep) {
 void S3HttpServer::start(int threads, std::vector<int> pins) {
     std::cout << "Starting S3 HTTP server for bucket " << bucket_name << " at " << endpoint << std::endl;
     
-    std::vector<std::unique_ptr<asio::io_context>> ioctxs;
-    ioctxs.reserve(threads);
+    ioctxs_.reserve(threads);
 
     for (int i = 0; i < threads; ++i)
-        ioctxs.emplace_back(std::make_unique<asio::io_context>(1));
+        ioctxs_.emplace_back(std::make_unique<asio::io_context>(1));
 
-    std::vector<std::thread> thread_pool;
-    thread_pool.reserve(threads);
+    // Set up signal handling FIRST, before threads start
+    signals_ = std::make_unique<asio::signal_set>(*ioctxs_[0], SIGINT, SIGTERM);
+    signals_->async_wait([this](boost::system::error_code const&, int sig) {
+        std::cout << "Stopping HTTP server" << std::endl;
+        stop();
+        store_->shutdown_store();
+    });
+
+    thread_pool_.reserve(threads);
 
     for (int i = 0; i < threads; i++) {
-        thread_pool.emplace_back([&, i]{
+        thread_pool_.emplace_back([&, i]{
 
             if (pins.size() > 0)
                 pin_thread_to_core(pins[i]);
 
             asio::co_spawn(
-                *ioctxs[i],
+                *ioctxs_[i],
                 do_listen(endpoint),
                 [](std::exception_ptr e) {
                     if (e) {
@@ -442,10 +448,10 @@ void S3HttpServer::start(int threads, std::vector<int> pins) {
                         }
                     }
                 });
-            ioctxs[i]->run();
+            ioctxs_[i]->run();
         });
     }
 
-    for (auto& t : thread_pool)
+    for (auto& t : thread_pool_)
         t.join();
 }

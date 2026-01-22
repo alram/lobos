@@ -9,27 +9,32 @@
 
 #define SPDK_STATS_UPDATE_INTERVAL_SEC 2
 
-void SpdkStore::shutdown_blobstore() {
+void SpdkStore::shutdown_store() {
     std::cout << "shutting down blobstore" << std::endl;
-    auto ctx = static_cast<SpdkStore*>(this);
+    shutdown_stats_engine();
 
-    auto unload_blobstore = [](void* args) {
+    auto unload_spdk = [](void* args) {
         auto ctx = static_cast<SpdkStore*>(args);
-        spdk_bs_free_io_channel(ctx->io_channel_);
-        spdk_bs_unload(ctx->bs_, [](void *cb_arg, int bserrno) {
-            auto ctx = static_cast<SpdkStore*>(cb_arg);
-            ctx->store_ready = false;
-        }, ctx);
+        if(ctx->io_channel_) {
+            spdk_bs_free_io_channel(ctx->io_channel_);
+        }
+        if (ctx->bs_) {
+            spdk_bs_unload(ctx->bs_, [](void *cb_arg, int bserrno) {
+                auto ctx = static_cast<SpdkStore*>(cb_arg);
+                ctx->store_shutdown = true;
+            }, ctx);
+        }
+
     };
-    spdk_thread_send_msg(spdk_reactor_->get_thread(), unload_blobstore, &ctx);
-    while (store_ready) {
+
+    spdk_thread_send_msg(spdk_reactor_->get_thread(), unload_spdk, this);
+    while (!store_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
-    std::cout << "blobstore shutdown complete" << std::endl;
-    
-    //TODO detach nvme controller from spdk instance.
-    // send_rpc_req("bdev_nvme_detach_controller", 
-    //              "{\"name\":\"" + std::string(LOBOS_BDEV_NAME_BASE) + "\"}");
+    spdk_reactor_->stop();
+    spdk_reactor_->join();
+
+    std::cout << "SPDK shutdown complete" << std::endl;
 }
 
 // Static callback that handles each blob and chains to the next
@@ -125,8 +130,6 @@ void SpdkStore::init_store(std::string devSpec) {
 
     // Collects usage stats and perf information
     start_stats_engine();
-
-    store_ready = true;
 
     // start the in-memory index.
     index_ = std::make_unique<IndexStore>();
@@ -367,7 +370,6 @@ void SpdkStore::get_blob_metadata(spdk_blob* blob, Object* o, const char*& key) 
 }
 
 void SpdkStore::update_stats() {
-    auto ctx = static_cast<SpdkStore*>(this);
     auto run_in_spdk = [](void* arg) {
         auto ctx = static_cast<SpdkStore*>(arg);
         // TODO other stats there (iops/bw)
@@ -375,7 +377,7 @@ void SpdkStore::update_stats() {
         ctx->stats_updating = false;
     };
     stats_updating = true;
-    spdk_thread_send_msg(spdk_reactor_->get_thread(), run_in_spdk, ctx);
+    spdk_thread_send_msg(spdk_reactor_->get_thread(), run_in_spdk, this);
     while(stats_updating) {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
@@ -392,5 +394,10 @@ void SpdkStore::start_stats_engine() {
 }
 
 void SpdkStore::lock_store_if_full() {
-    read_only = (stats_->total_clusters - stats_->available_clusters  >= conf_.max_use_pct) ? true : false;
+    std::cout << "total clusters: " << stats_->total_clusters  << " - avail clusters: " << stats_->available_clusters << std::endl;
+    float used = stats_->total_clusters - stats_->available_clusters;
+    std::cout << "used pct: " << (used / stats_->total_clusters) * 100 << std::endl;
+
+
+    read_only = (used *100 / stats_->total_clusters) >= conf_.max_use_pct ? true : false;
 }
