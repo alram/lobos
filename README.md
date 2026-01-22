@@ -189,15 +189,16 @@ All tests were performed on a `WD_BLACK SN7100 500GB` with a `cluster_sz` of 32K
 | SPDK | 1 MiB | 50 | GET | 4274.65 MiB/s |
 | File | 32KiB | 200 | PUT | 10738 op/s - 335.56 MiB/s |
 | File | 32KiB | 200 | GET | 84621 op/s - 2644 MiB/s* |
-| SPDK | 32KiB | 200 | PUT | TODO |
+| SPDK | 32KiB | 200 | PUT | 34005 op/s - 1062.66 MiB/s ** |
 | SPDK | 32KiB | 200 | GET | 83463 op/s - 2608.22 MiB/s*** |
 
 
 \* The GET filesystem result were (almost) all cached. Little to no disk I/O were observed.
 
-** Performance degraded after ~30 seconds and lowered to ~900MiB/s. This is a consummer drive and I basically hit the write cliff, fast. This was confirmed by 1) running the benchmarking immediately after end, which showed 900MiB/s 2) letting the drive idle for 1h and re-running the benchmark showed the init performance and degraded a few seconds later again. The performance number showed above is pre-cliff.
+** Performance degraded after ~30 seconds and lowered to ~900MiB/s. This is a consummer drive and I basically hit the write cliff, fast. This was confirmed by 1) running the benchmarking immediately after end, which showed 900MiB/s 2) letting the drive idle for 1h and re-running the benchmark showed the init performance and degraded a few seconds later again. The performance number showed above is pre-cliff. <br />
+The 32KiB tests showed the same pattern although less pronounced, starting at 51k op/s.
 
-*** For GET 32KiB test, the busiest processes were warp's, not lobos, as evident by the same numbers for the two backends.
+*** For GET 32KiB test, the busiest processes were warp's, not lobos', as evident by the same numbers for the two backends.
 
 Note on SPDK performance: There's unnecessary memcpy, something I'm actively working to change. Performance numbers will be updated once done.
 
