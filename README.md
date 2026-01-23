@@ -20,6 +20,21 @@ The parsing is pretty naive so things can get broken quick but the following see
 
  SPDK support is still very experimental and while the whole project has a lot of shortcuts that needs to addressed, SPDK has a lot more. Working on this at the moment.
 
+Next area of work in no particular order:
+ - New index for SPDK
+ - Blob pool/dynamic blob handle cache
+ - SPDK buffe pool
+ - Extend S3 support
+    - Auth
+    - MPU
+    - Range request
+    - Checksums
+    - Object versioning
+    - Object tagging
+    - Object Copy
+    - ... probably more
+ - Control plane
+
 ## Building
 
 There's some work needed to make it easier to build... but for now:
@@ -180,22 +195,22 @@ Since SPDK pass through the device, classic methods of monitoring are out of the
 ```bash $ curl localhost:9091/metrics
 # HELP spdk_bdev_read_ops_total Total read operations
 # TYPE spdk_bdev_read_ops_total counter
-spdk_bdev_read_ops_total 3
+spdk_bdev_read_ops_total 57826
 # HELP spdk_bdev_write_ops_total Total write operations
 # TYPE spdk_bdev_write_ops_total counter
-spdk_bdev_write_ops_total 1
+spdk_bdev_write_ops_total 2023380
 # HELP spdk_bdev_bytes_read_total Total bytes read
 # TYPE spdk_bdev_bytes_read_total counter
-spdk_bdev_bytes_read_total 37376
+spdk_bdev_bytes_read_total 236883968
 # HELP spdk_bdev_bytes_written_total Total bytes written
 # TYPE spdk_bdev_bytes_written_total counter
-spdk_bdev_bytes_written_total 4096
+spdk_bdev_bytes_written_total 61328384000
 # HELP spdk_bs_clusters_total Total blobstore clusters
 # TYPE spdk_bs_clusters_total gauge
-spdk_bs_clusters_total 447
+spdk_bs_clusters_total 13354145
 # HELP spdk_bs_clusters_available Total blobstore clusters available
 # TYPE spdk_bs_clusters_available gauge
-spdk_bs_clusters_available 447
+spdk_bs_clusters_available 11503873
 ```
 Note that the collector port is not configurable at the moment.
 
