@@ -4,6 +4,10 @@
 #include <spdk/bdev.h>
 #include <spdk/blob.h>
 
+#include <prometheus/counter.h>
+#include <prometheus/exposer.h>
+#include <prometheus/registry.h>
+
 #define SPDK_STATS_UPDATE_INTERVAL_SEC 2
 
 struct SpdkBsStats {
@@ -24,7 +28,14 @@ public:
     void start_stats_engine();
     void update_stats();
     void shutdown_stats_engine();
-    float get_store_percent_used(); 
+    float get_store_percent_used();
+    void start_prom_collector();
+    void stop_prom_collector() {
+        std::cout << "Shutting down prom collector" << std::endl;
+        run_prom_collector = false;
+        if (collector_thread_.joinable())
+            collector_thread_.join();
+    };
     std::atomic<bool> stats_updating = false;
 private:
     spdk_thread* spdk_thread_;
@@ -33,7 +44,14 @@ private:
     SpdkBsStats stats_;
 
     std::thread engine_thread_;
-    std::thread collector_thread_;
-
     std::atomic<bool> run_stats_engine_ = true;
+
+    std::thread collector_thread_;
+    std::atomic<bool> run_prom_collector = true;
+    prometheus::Gauge* total_clusters_;
+    prometheus::Gauge* avail_clusters_;
+    prometheus::Counter* read_ops_;
+    prometheus::Counter* write_ops_;
+    prometheus::Counter* bytes_read_;
+    prometheus::Counter* bytes_written_;
 };

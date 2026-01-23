@@ -25,6 +25,7 @@ The parsing is pretty naive so things can get broken quick but the following see
 There's some work needed to make it easier to build... but for now:
 
 ```bash
+$ sudo apt install prometheus-cpp-dev
 $ git clone https://github.com/alram/lobos.git
 $ cd lobos/src/
 # Build Boost
@@ -174,7 +175,29 @@ attempting to rebuild index if exist
 index build complete
 Starting S3 HTTP server for bucket lobos at 127.0.0.1:8080
 ```
+Since SPDK pass through the device, classic methods of monitoring are out of the window. When in SPDK mode, a prometheus collector will be started and accessible at `http://127.0.0.1:9091`
 
+```bash $ curl localhost:9091/metrics
+# HELP spdk_bdev_read_ops_total Total read operations
+# TYPE spdk_bdev_read_ops_total counter
+spdk_bdev_read_ops_total 3
+# HELP spdk_bdev_write_ops_total Total write operations
+# TYPE spdk_bdev_write_ops_total counter
+spdk_bdev_write_ops_total 1
+# HELP spdk_bdev_bytes_read_total Total bytes read
+# TYPE spdk_bdev_bytes_read_total counter
+spdk_bdev_bytes_read_total 37376
+# HELP spdk_bdev_bytes_written_total Total bytes written
+# TYPE spdk_bdev_bytes_written_total counter
+spdk_bdev_bytes_written_total 4096
+# HELP spdk_bs_clusters_total Total blobstore clusters
+# TYPE spdk_bs_clusters_total gauge
+spdk_bs_clusters_total 447
+# HELP spdk_bs_clusters_available Total blobstore clusters available
+# TYPE spdk_bs_clusters_available gauge
+spdk_bs_clusters_available 447
+```
+Note that the collector port is not configurable at the moment.
 
 ## Performance
 
