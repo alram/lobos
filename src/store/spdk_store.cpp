@@ -7,12 +7,11 @@
 #define BLOB_META_NAME "metadata"
 #define BLOB_META_KEY "key"
 
-#define SPDK_STATS_UPDATE_INTERVAL_SEC 2
-
 void SpdkStore::shutdown_store() {
-    std::cout << "shutting down blobstore" << std::endl;
-    shutdown_stats_engine();
+    stats_->shutdown_stats_engine();
+    shutdown_fill_checker();
 
+    std::cout << "Shutting down SPDK blobstore" << std::endl;
     auto unload_spdk = [](void* args) {
         auto ctx = static_cast<SpdkStore*>(args);
         if(ctx->io_channel_) {
@@ -31,10 +30,10 @@ void SpdkStore::shutdown_store() {
     while (!store_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
+    std::cout << "Shutting down SPDK app" << std::endl;
     spdk_reactor_->stop();
     spdk_reactor_->join();
 
-    std::cout << "SPDK shutdown complete" << std::endl;
 }
 
 // Static callback that handles each blob and chains to the next
@@ -106,17 +105,17 @@ void SpdkStore::init_store(std::string devSpec) {
         dev = std::make_unique<NvmeBSInitializer>(devSpec, conf_);
     }
     
-    spdk_blob_store* bs = dev->initialize(spdk_reactor_->get_thread());
+    auto [bdev, bs] = dev->initialize(spdk_reactor_->get_thread());
+    if (!bdev) throw std::runtime_error("failed to initilize bdev");
     if (!bs) throw std::runtime_error("Failed to initialize blobstore");
-
+    
     bs_ = bs;
+    bdev_ = bdev;
 
     auto alloc_channel = [](void *args) {
         auto ctx = static_cast<SpdkStore*>(args);
         ctx->io_channel_ = spdk_bs_alloc_io_channel(ctx->bs_);
         ctx->io_unit_size_ = spdk_bs_get_io_unit_size(ctx->bs_);
-        ctx->stats_->total_clusters = spdk_bs_total_data_cluster_count(ctx->bs_);
-        ctx->stats_->available_clusters = spdk_bs_free_cluster_count(ctx->bs_);
     };
 
     auto ctx = static_cast<SpdkStore*>(this);
@@ -125,11 +124,14 @@ void SpdkStore::init_store(std::string devSpec) {
     while(!ctx->io_unit_size_ || !ctx->io_channel_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    std::cout << "avail clusters: " << ctx->stats_->available_clusters << std::endl;
-    std::cout << "total_clusters clusters: " << ctx->stats_->total_clusters << std::endl;
 
     // Collects usage stats and perf information
-    start_stats_engine();
+    stats_ = std::make_unique<SpdkStats>(spdk_reactor_->get_thread(), bdev_, bs_);
+    stats_->start_stats_engine();
+
+    // periodically checks store usage and make it ro
+    // if above the user defined threshold
+    make_store_ro_if_full_checker();
 
     // start the in-memory index.
     index_ = std::make_unique<IndexStore>();
@@ -367,33 +369,4 @@ void SpdkStore::get_blob_metadata(spdk_blob* blob, Object* o, const char*& key) 
     if (rc == 0) {
         key = static_cast<const char*>(xattr_v);
     }
-}
-
-void SpdkStore::update_stats() {
-    auto run_in_spdk = [](void* arg) {
-        auto ctx = static_cast<SpdkStore*>(arg);
-        // TODO other stats there (iops/bw)
-        ctx->stats_->available_clusters = spdk_bs_free_cluster_count(ctx->bs_);
-        ctx->stats_updating = false;
-    };
-    stats_updating = true;
-    spdk_thread_send_msg(spdk_reactor_->get_thread(), run_in_spdk, this);
-    while(stats_updating) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
-    lock_store_if_full();
-}
-
-void SpdkStore::start_stats_engine() {
-    stats_t_ = std::thread([this] {
-        while (run_stats_engine_) {
-            update_stats();
-            std::this_thread::sleep_for(std::chrono::seconds(SPDK_STATS_UPDATE_INTERVAL_SEC));
-        }
-    });
-}
-
-void SpdkStore::lock_store_if_full() {
-    float used = stats_->total_clusters - stats_->available_clusters;
-    read_only = (used *100 / stats_->total_clusters) >= conf_.max_use_pct ? true : false;
 }

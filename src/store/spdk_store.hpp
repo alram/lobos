@@ -13,6 +13,7 @@
 
 #include "store.hpp"
 #include "../index/index.hpp"
+#include "spdk_stats.hpp"
 
 extern "C" {
 #include <spdk/bdev.h>
@@ -103,17 +104,10 @@ struct BlobStoreConfig {
     uint64_t max_use_pct;
 };
 
-struct SpdkBSStats {
-    uint64_t total_clusters;
-    uint64_t available_clusters;
-};
-
-
 class SpdkStore : public Store {
 public:
     explicit SpdkStore(SpdkReactor* spdk_reactor, BlobStoreConfig c) : spdk_reactor_(spdk_reactor) {
         conf_ = c;
-        stats_ = std::make_unique<SpdkBSStats>();
     };
 
     void init_store(std::string devSpec) override;
@@ -128,7 +122,7 @@ public:
 
 private:
     SpdkReactor* spdk_reactor_;
-    
+    spdk_bs_dev* bdev_ = nullptr;
     spdk_blob_store* bs_ = nullptr;
     spdk_io_channel* io_channel_ = nullptr;
     uint64_t io_unit_size_;
@@ -138,18 +132,24 @@ private:
     std::atomic<bool> index_ready = false;
     std::atomic<bool> store_shutdown = false;
 
-    std::unique_ptr<SpdkBSStats> stats_;
-    std::thread stats_t_;
-    std::atomic<bool> run_stats_engine_ = true;
-    std::atomic<bool> stats_updating = false;
+    std::unique_ptr<SpdkStats> stats_;
     bool read_only = false;
-    void start_stats_engine();
-    void update_stats();
-    void lock_store_if_full();
-    void shutdown_stats_engine() {
-        run_stats_engine_ = false;
-        if (stats_t_.joinable())
-            stats_t_.join();
+    std::thread fill_check_thread_;
+    std::atomic<bool> run_fill_checker_ = true;
+    void make_store_ro_if_full_checker() {
+        fill_check_thread_= std::thread([this] {
+            while (run_fill_checker_) {
+                std::this_thread::sleep_for(std::chrono::seconds(SPDK_STATS_UPDATE_INTERVAL_SEC));
+                if (stats_->get_store_percent_used() > conf_.max_use_pct)
+                    read_only = true;
+            }
+        });
+    }
+    void shutdown_fill_checker() {
+        std::cout << "Shutting down fill checker" << std::endl;
+        run_fill_checker_ = false;
+        if (fill_check_thread_.joinable())
+            fill_check_thread_.join();
     }
 
     void build_index_at_boot();

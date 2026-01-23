@@ -22,7 +22,7 @@ struct BlobStoreContext {
 class BlobStoreInitializer {
     public:
         virtual ~BlobStoreInitializer() = default;
-        virtual spdk_blob_store* initialize(spdk_thread* t) = 0;
+        virtual std::tuple<spdk_bs_dev*, spdk_blob_store*>  initialize(spdk_thread* t) = 0;
     protected:
         explicit BlobStoreInitializer(std::shared_ptr<BlobStoreContext> ctx, BlobStoreConfig conf) 
             : ctx_(std::move(ctx)) 
@@ -63,7 +63,7 @@ public:
     MallocBSInitializer(BlobStoreConfig conf)
             : BlobStoreInitializer(std::make_shared<BlobStoreContext>(), conf) {}
 
-    spdk_blob_store* initialize(spdk_thread* t) override {
+    std::tuple<spdk_bs_dev*, spdk_blob_store*> initialize(spdk_thread* t) override {
         std::string params = "{\"name\":\""+ std::string(LOBOS_BDEV_NAME) + "\",\"num_blocks\": 32768,\"block_size\":512}";
         send_rpc_req("bdev_malloc_create", params);
 
@@ -83,7 +83,7 @@ public:
             spdk_bs_opts_init(&opts, sizeof(opts));
             if (context->conf.cluster_sz > 0)
                 opts.cluster_sz = context->conf.cluster_sz;
-
+            context->bs_dev = bs_dev;
             spdk_bs_init(bs_dev, &opts, [](void *cb_args, spdk_blob_store* bs, int bserr) {
                 auto final_ctx = static_cast<BlobStoreContext*>(cb_args);
                 if (bserr == 0) {
@@ -101,7 +101,7 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
-        return ctx_->bs;
+        return std::tuple<spdk_bs_dev*, spdk_blob_store*>{ctx_->bs_dev, ctx_->bs};
     }
 
 };
@@ -121,7 +121,7 @@ public:
     , pci_addr(addr)
     {}
 
-    spdk_blob_store* initialize(spdk_thread* t) override {
+    std::tuple<spdk_bs_dev*, spdk_blob_store*>  initialize(spdk_thread* t) override {
 
         //TODO: using C API instead of RPC might be more robust..
         // need to add: traddr and trype 
@@ -148,6 +148,7 @@ public:
             if (context->conf.cluster_sz > 0)
                 opts.cluster_sz = context->conf.cluster_sz;
 
+            context->bs_dev = bs_dev;
             spdk_bs_load(bs_dev, &opts, [](void *cb_args, spdk_blob_store* bs, int bserr) {
                 auto ctx = static_cast<BlobStoreContext*>(cb_args);
                 if (bserr == 0) {
@@ -168,6 +169,7 @@ public:
                         ctx->init_done = true;
                         return;
                     }
+                    ctx->bs_dev = bs_dev;
                     spdk_bs_init(bs_dev, &opts, [](void *cb_args, spdk_blob_store* bs, int bserr) {
                         auto final_ctx = static_cast<BlobStoreContext*>(cb_args);
                         if (bserr == 0) {
@@ -191,6 +193,6 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
 
-        return ctx_->bs;
+        return std::tuple<spdk_bs_dev*, spdk_blob_store*>{ctx_->bs_dev, ctx_->bs};
     }
 };
