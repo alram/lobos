@@ -12,7 +12,7 @@ namespace asio = boost::asio;
 // I'm trying REALLY hard to not name this filestore...
 class FsStore : public Store {
 public:
-    void init_store(std::string devSpec=nullptr) override {};
+    void init_store(std::string) override {};
     asio::awaitable<int> do_write(std::string o, session_buffer& buffer) override;
     asio::awaitable<int> do_read(std::string o, uint64_t offset, session_buffer& buffer) override;
     asio::awaitable<bool> do_delete(std::string_view o) override;

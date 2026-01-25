@@ -75,7 +75,6 @@ asio::awaitable<void> FsStore::do_list(std::string_view prefix, session_buffer& 
                 continue;
             }
         }
-        size_t old_size = buffer.size();
         std::string s;
         if (fs::is_directory(entry.path())) {
             s =  "<CommonPrefixes>"

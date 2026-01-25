@@ -34,6 +34,8 @@ void SpdkStats::update_stats() {
             ctx->bdev_->get_base_bdev(ctx->bdev_), 
             &ctx->stats_.iostat, SPDK_BDEV_RESET_STAT_ALL, 
             [](struct spdk_bdev *bdev, struct spdk_bdev_io_stat *stat, void *cb_arg, int rc){
+                if (rc)
+                    std::cerr << "non-fatal err retrieving usage stats: " << rc << std::endl;
                 auto ctx = static_cast<SpdkStats*>(cb_arg);
                 ctx->stats_updating = false;
             }, 

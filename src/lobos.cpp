@@ -176,7 +176,7 @@ int main(int argc, char **argv) {
     std::vector<int> pins{};
     if (!pins_s.empty()) {
         pins = parse_threads_input(vm["entry.http_threads_cores"].as<std::string>());
-        if (http_threads != pins.size()) {
+        if (static_cast<size_t>(http_threads) != pins.size()) {
             std::cerr << "Error http_threads and http_threads_cores need to match core count" << std::endl;
             return 1;
         }

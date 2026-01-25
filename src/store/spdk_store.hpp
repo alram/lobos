@@ -89,13 +89,14 @@ struct IoCtx {
     spdk_blob_id blob_id;
     size_t size;
     spdk_blob* blob;
+    uint64_t offset;
 
     IoCtx() = default;
 
     IoCtx(session_buffer& buf)
         :
-        size(buf.size()),
         buffer(&buf)
+        , size(buf.size())
     {}
 };
 

@@ -19,6 +19,8 @@ void SpdkStore::shutdown_store() {
         }
         if (ctx->bs_) {
             spdk_bs_unload(ctx->bs_, [](void *cb_arg, int bserrno) {
+                if (bserrno)
+                    std::cerr << "error unloading bs: " << bserrno << std::endl;
                 auto ctx = static_cast<SpdkStore*>(cb_arg);
                 ctx->store_shutdown = true;
             }, ctx);
@@ -227,6 +229,7 @@ asio::awaitable<int> SpdkStore::do_write(std::string o, session_buffer& buffer) 
                     if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
                     spdk_blob_sync_md(ctx->ioctx->blob, [](void *cb_arg, int bserrno) {
                         auto ctx = static_cast<BlobOpCtx*>(cb_arg);
+                        if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
                         //finally we write
                         uint64_t write_size = ctx->ioctx->size / ctx->store->io_unit_size_;
                         if (ctx->ioctx->size % ctx->store->io_unit_size_ != 0) {
@@ -240,6 +243,8 @@ asio::awaitable<int> SpdkStore::do_write(std::string o, session_buffer& buffer) 
                                 if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
                                 spdk_blob_close(ctx->ioctx->blob, [](void *cb_arg, int bserrno) {
                                     auto ctx = static_cast<BlobOpCtx*>(cb_arg);
+                                    if (bserrno)
+                                        std::cerr << "non-fatal error closing blob: " << bserrno << std::endl;
                                     // Add entry to index - TODO index stuff is suepr hacky
                                     ctx->store->index_->add_entry(ctx->ioctx->key, {
                                         ctx->ioctx->md->size,
@@ -272,6 +277,7 @@ asio::awaitable<int> SpdkStore::do_read(std::string o, uint64_t offset, session_
     auto ioctx = new IoCtx(buffer);
     ioctx->key = o;
     ioctx->blob_id = it->second.blob_id;
+    ioctx->offset = offset;
 
     co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, ioctx](auto complete) {
         auto ctx = new BlobOpCtx{this, ioctx, std::move(complete)};
@@ -283,13 +289,15 @@ asio::awaitable<int> SpdkStore::do_read(std::string o, uint64_t offset, session_
             if (ctx->ioctx->buffer->size() % ctx->store->io_unit_size_ != 0) {
                 io_units++;
             }
-            spdk_blob_io_read(blob, ctx->store->io_channel_, ctx->ioctx->buffer->data(), 0, io_units, [](void *cb_arg, int bserrno) {
+            spdk_blob_io_read(blob, ctx->store->io_channel_, ctx->ioctx->buffer->data(), ctx->ioctx->offset, io_units, [](void *cb_arg, int bserrno) {
                 auto ctx = static_cast<BlobOpCtx*>(cb_arg);
                 if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
                 spdk_blob_close(ctx->ioctx->blob, [](void *cb_arg, int bserrno) {
-                auto ctx = static_cast<BlobOpCtx*>(cb_arg);
-                ctx->complete(0);
-                delete ctx;
+                    auto ctx = static_cast<BlobOpCtx*>(cb_arg);
+                    if (bserrno)
+                        std::cerr << "non-fatal error closing blob: " << bserrno << std::endl;
+                    ctx->complete(0);
+                    delete ctx;
                 }, ctx); // spdk_blob_close
             }, ctx); //spdk_blob_io_read
         }, ctx); //spdk_bs_open_blob

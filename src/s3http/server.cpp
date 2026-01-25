@@ -424,7 +424,7 @@ void S3HttpServer::start(int threads, std::vector<int> pins) {
     // Set up signal handling FIRST, before threads start
     signals_ = std::make_unique<asio::signal_set>(*ioctxs_[0], SIGINT, SIGTERM);
     signals_->async_wait([this](boost::system::error_code const&, int sig) {
-        std::cout << "Stopping HTTP server" << std::endl;
+        std::cout << "Received: " << sig << " - Stopping." << std::endl;
         stop();
         store_->shutdown_store();
     });
