@@ -73,6 +73,15 @@ std::vector<int> parse_threads_input(std::string i) {
     return pins;
 }
 
+bool validate_server_can_run(httpConfig conf) {
+    if (conf.access_key.empty() || conf.secret_key.empty()) {
+        // we don't allow no-auth and bind to something else
+        if (conf.address != "127.0.0.1")
+            return false;
+    }
+    return true;
+}
+
 int main(int argc, char **argv) {
 
     po::options_description cmdline_options("Command Line Options");
@@ -83,9 +92,12 @@ int main(int argc, char **argv) {
     po::options_description config_options("Configuration");
         config_options.add_options()
             ("entry.backend", po::value<std::string>()->required())
-            ("entry.port", po::value<int>()->default_value(8080))
+            ("entry.listen_ip", po::value<std::string>()->default_value("127.0.0.1"))
+            ("entry.port", po::value<short unsigned int>()->default_value(8080))
             ("entry.http_threads", po::value<int>()->default_value(8))
             ("entry.http_threads_cores", po::value<std::string>()->default_value(""))
+            ("entry.access_key", po::value<std::string>()->default_value(""))
+            ("entry.secret_key", po::value<std::string>()->default_value(""))
             ("filesystem.directory", po::value<std::string>()->default_value(""))
             ("spdk_blobstore.device", po::value<std::string>()->default_value(""))
             ("spdk_blobstore.cluster_sz", po::value<uint32_t>()->default_value(131072))
@@ -125,15 +137,23 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    httpConfig conf = {
+        vm["entry.listen_ip"].as<std::string>(),
+        vm["entry.port"].as<short unsigned int>(),
+        vm["entry.access_key"].as<std::string>(),
+        vm["entry.secret_key"].as<std::string>(),
+    };
+
+    if(!validate_server_can_run(conf))
+        throw std::runtime_error("Error: when auth is disabled, lobos can only use 127.0.0.1 for listen_ip");
 
     std::unique_ptr<Store> store;
     std::unique_ptr<SpdkReactor> spdk_reactor;
     std::string bucket = "";
-    bool use_spdk = false;
 
     std::string backend = vm["entry.backend"].as<std::string>();
     if (backend == "spdk_blobstore") {
-        use_spdk = true;
+        conf.use_spdk = true;
         bucket = "lobos";
         SpdkReactorConf conf = {
             vm["spdk_blobstore.log_level"].as<std::string>(),
@@ -165,11 +185,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    S3HttpServer server("127.0.0.1", 
-            vm["entry.port"].as<int>(), 
-            bucket, 
-            store.get(),
-            use_spdk);
+    S3HttpServer server(bucket, store.get(), conf);
 
     int http_threads = vm["entry.http_threads"].as<int>();
     std::string pins_s = vm["entry.http_threads_cores"].as<std::string>();

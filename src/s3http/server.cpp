@@ -1,10 +1,15 @@
 #include <tuple>
 #include <pthread.h>
 #include <sched.h>
+#include <set>
 
 #include <boost/filesystem.hpp>
 #include <boost/range/iterator_range.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/url.hpp>
+
+#include <openssl/sha.h>
+#include <openssl/hmac.h>
 
 #include "server.hpp"
 
@@ -75,6 +80,156 @@ std::string S3HttpServer::to_rfc1123(time_t t) {
     return buf; 
 }
 
+std::string sha256_hex(const std::string& input) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256(reinterpret_cast<const unsigned char*>(input.c_str()), input.size(), hash);
+
+    std::stringstream ss;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+    }
+    return ss.str();
+}
+
+std::vector<unsigned char> hmac_sha256(const std::string& key, const std::string& data) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    unsigned int len;
+
+    HMAC(EVP_sha256(),
+         key.c_str(), key.size(),
+         reinterpret_cast<const unsigned char*>(data.c_str()), data.size(),
+         hash, &len);
+
+    return std::vector<unsigned char>(hash, hash + len);
+}
+
+std::vector<unsigned char> hmac_sha256(const std::vector<unsigned char>& key, const std::string& data) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    unsigned int len;
+
+    HMAC(EVP_sha256(),
+         key.data(), key.size(),
+         reinterpret_cast<const unsigned char*>(data.c_str()), data.size(),
+         hash, &len);
+
+    return std::vector<unsigned char>(hash, hash + len);
+}
+
+std::string hmactohex(const std::vector<unsigned char>& key) {
+    std::stringstream ss;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)key[i];
+    }
+    return ss.str();
+}
+
+asio::awaitable<bool> S3HttpServer::auth_request(const http::request<http::buffer_body>& req) {
+    if (conf_.auth_enabled) {
+        auto auth = req["Authorization"];
+        if(auth.empty())
+            co_return false;
+
+        // Make sure algorigthm is AWS4-HMAC-SHA256
+        if (!auth.starts_with("AWS4-HMAC-SHA256"))
+            co_return false;
+        // Get the credential line
+        auto pos_s = auth.find("Credential=") + beast::string_view("Credential=").size();
+        if (pos_s == beast::string_view::npos)
+            co_return false;
+        auto pos_e = auth.find(",");
+        beast::string_view auth_creds = auth.substr(pos_s, pos_e-pos_s);
+        // we only support one key/secret for now so we don't store it but
+        // in the future if we want ot support multiple we'll change that
+        auto in_pos = auth_creds.find("/");
+        auth_creds.remove_prefix(in_pos+1);
+        in_pos = auth_creds.find('/');
+        auto scope_date = auth_creds.substr(0, in_pos);
+        auto out_pos = auth_creds.find('/', in_pos+1);
+        auto scope_region = auth_creds.substr(in_pos+1, out_pos-in_pos-1);
+
+        auth.remove_prefix(pos_e + 1);
+
+        // Get signed headers
+        pos_s = auth.find("SignedHeaders=") + beast::string_view("SignedHeaders=").size();
+        if (pos_s == beast::string_view::npos)
+            co_return false;
+        pos_e = auth.find(",");
+        beast::string_view auth_signedheaders = auth.substr(pos_s, pos_e-pos_s);
+        auth.remove_prefix(pos_e + 1);
+
+        // Get signature
+        pos_s = auth.find("Signature=") + beast::string_view("Signature=").size();
+        if (pos_s == beast::string_view::npos)
+            co_return false;
+        beast::string_view auth_sign = auth.substr(pos_s);
+
+        // Get path and query params
+        beast::string_view target = req.target();
+        std::string path;
+        std::string query;
+        pos_s = target.find('?');
+        if (pos_s != beast::string_view::npos) {
+            path = target.substr(0, pos_s);
+            query = target.substr(pos_s + 1);
+        } else {
+            path = target;
+            query = "";
+        }
+
+        // Query params must be in alphabetical order (kill me plz)
+        std::set<std::string> s;
+        while (true) {
+            pos_s = query.find('&');
+            s.insert(query.substr(0, pos_s));
+            query.erase(0, pos_s+1);
+            if (pos_s == beast::string_view::npos) {
+                query.erase(0);
+                break;
+            }
+        }
+
+        for (std::string q : s) {
+            query += q + "&";
+        }
+        query.pop_back();        // lazy
+
+        // String to Sha256
+        std::string cannonicalRequest =
+            std::string(req.method_string()) + "\n" +
+            path + "\n" + query + "\n";
+
+        // Extract and store the signed headers for this request
+        pos_s = 0;
+        std::string signedHeaders = std::string(auth_signedheaders);
+        // this could bug i believe
+        while (pos_s != beast::string_view::npos) {
+            pos_s = auth_signedheaders.find(';');
+            auto h = auth_signedheaders.substr(0, pos_s);
+            cannonicalRequest += std::string(h) + ":" + std::string(req[h]) + "\n";
+            auth_signedheaders.remove_prefix(pos_s+1);
+        }
+
+        cannonicalRequest += "\n" + signedHeaders + "\n" + std::string(req["x-amz-content-sha256"]);
+        auto shaCannonReq = sha256_hex(cannonicalRequest);
+
+        std::string stringToSign = "AWS4-HMAC-SHA256\n" +
+            std::string(req["x-amz-date"]) +
+            "\n" + std::string(auth_creds) + "\n"
+            + shaCannonReq;
+
+        auto date_key = hmac_sha256("AWS4"+ conf_.secret_key, std::string(scope_date));
+        auto region_key = hmac_sha256(date_key, std::string(scope_region));
+        auto svc_key = hmac_sha256(region_key, "s3");
+        auto signing_key = hmac_sha256(svc_key, "aws4_request");
+        auto calc = hmac_sha256(signing_key, stringToSign);
+
+        if (hmactohex(calc) != auth_sign)
+            co_return false;
+
+    }
+    co_return true;
+}
+
 bool S3HttpServer::parse_aws_params(std::string_view t, std::unordered_map<std::string, std::string>& aws_params) {
       
     auto target = boost::urls::parse_relative_ref(t);
@@ -127,6 +282,19 @@ http::message_generator S3HttpServer::not_found_key_res(beast::string_view targe
         "<Message>The resource you requested does not exist</Message>"
         "<Resource>" + std::string(target) + "</Resource>"
         "<RequestId>DEADBEEF</RequestId>";
+    res.prepare_payload();
+    return res;
+}
+
+http::message_generator S3HttpServer::forbidden_res(http::request<http::buffer_body>&& req) {
+    http::response<http::string_body> res{http::status::forbidden, req.version()};
+    res.set(http::field::server, SERVER_NAME);
+    res.set(http::field::content_type, "application/xml");
+    res.keep_alive(req.keep_alive());
+    res.body() = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<Error><Code>InvalidAccessKeyId</Code>"
+        "<Message></Message>"
+        "</Error>";
     res.prepare_payload();
     return res;
 }
@@ -340,8 +508,6 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
 // Handles an HTTP server connection
 asio::awaitable<void> S3HttpServer::do_session(beast::tcp_stream stream) {
     beast::flat_buffer buffer;
-    //TODO: might want to use a bufferpool 
-    // https://claude.ai/chat/2e353513-17f0-4f0a-83e2-410cdabe1935
     for(;;)
     {
         auto session_buffer = make_buffer(0);
@@ -350,9 +516,17 @@ asio::awaitable<void> S3HttpServer::do_session(beast::tcp_stream stream) {
 
         http::request_parser<http::buffer_body> parser;
         parser.body_limit(MAX_OBJ_SIZE);
-
         // Parse headers first for PUT reqs
         co_await http::async_read_header(stream, buffer, parser, asio::use_awaitable);
+        auto authed = co_await auth_request(parser.get());
+        if (!authed) {
+            auto msg = forbidden_res(std::move(parser.release()));
+            co_await beast::async_write(stream, std::move(msg), asio::use_awaitable);
+            if (!parser.get().keep_alive())
+                break;
+            continue;
+        }
+
         if (parser.get().method() == http::verb::put) {
             std::string target = parser.get().target();
             sanitize_target_path(target);

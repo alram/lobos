@@ -26,21 +26,30 @@ namespace beast = boost::beast;
 namespace http  = beast::http;
 namespace asio   = boost::asio;
 
+struct httpConfig {
+    std::string address;
+    short unsigned int port;
+    std::string access_key;
+    std::string secret_key;
+    bool use_spdk = false;
+    bool auth_enabled = true;
+};
 
 class S3HttpServer {
 public:
     explicit S3HttpServer(
-        std::string address,
-        unsigned short port,
         std::string dir,
         Store* store,
-        bool use_spdk
+        httpConfig c
     )
         : store_(store)
-        , use_spdk_(use_spdk)
+        , conf_(c)
     {
-        auto const addr = asio::ip::make_address(address);
-        endpoint = {addr, port};
+        if (conf_.access_key.empty() || conf_.secret_key.empty())
+            conf_.auth_enabled = false;
+
+        auto const addr = asio::ip::make_address(conf_.address);
+        endpoint = {addr, conf_.port};
 
         // Bucket name is the last dir passed
         // or lobos in non-fs mode
@@ -60,7 +69,7 @@ public:
     }
 private:
     Store* store_;
-    bool use_spdk_;
+    httpConfig conf_;
     std::vector<std::unique_ptr<asio::io_context>> ioctxs_;
     std::vector<std::thread> thread_pool_;
     std::unique_ptr<asio::signal_set> signals_;
@@ -79,6 +88,8 @@ private:
     static beast::string_view mime_type(beast::string_view path);
     std::string create_dest_dirs_if_not_exist(std::string object);
 
+    asio::awaitable<bool> auth_request(const http::request<http::buffer_body>& req);
+
     asio::awaitable<http::message_generator> handle_get_object(beast::string_view object, 
         http::request<http::buffer_body>&& req,
         std::shared_ptr<session_buffer> session_buffer);
@@ -92,9 +103,10 @@ private:
 
     http::message_generator not_found_bucket_res(beast::string_view bucket, http::request<http::buffer_body>&& req);
     http::message_generator not_found_key_res(beast::string_view object, http::request<http::buffer_body>&& req);
+    http::message_generator forbidden_res(http::request<http::buffer_body>&& req);
 
     std::shared_ptr<session_buffer> make_buffer(size_t size) {
-        if (use_spdk_)
+        if (conf_.use_spdk)
             return std::make_shared<spdk_buffer>(size);
         else
             return std::make_shared<vector_buffer>(size);

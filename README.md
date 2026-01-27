@@ -2,7 +2,7 @@
 
 **NOTE** This is a learning experiment to get familiar with C++ with no certain future maintenance or improvements. It's currently under active development.
 
-Lobos (local objectstore) allows a user to quickly deploy a local (bind to `127.0.0.1` only) object store. 
+Lobos (local objectstore) allows a user to quickly deploy a local object store. Lobos can bind to `127.0.0.1` with noauth or any local IP when auth is enabled (see lobos.cfg in the repo for more info).
 Lobos supports 2 backends, a filesystem and SPDK's blobstore:
  - Filesystem: When in filesystem mode, Lobos will translate S3 calls into filesystems'. The directory Lobos is pointed out will become the bucket name. For instance, if you point Lobos at `/mnt/disk0` your bucket name will be `disk0`.
  - SPDK's blobstore: Lobos bucket name will always `lobos`. See the SPDK documentation below for configuration information.
@@ -18,14 +18,13 @@ The parsing is pretty naive so things can get broken quick but the following see
 
  Benchmark tools `elbencho` and `warp` work as well (but checksums aren't supported)
 
- SPDK support is still very experimental and while the whole project has a lot of shortcuts that needs to addressed, SPDK has a lot more. Working on this at the moment.
+ SPDK support is still very experimental and while the whole project has a lot of shortcuts that needs to be addressed, SPDK has a lot more.
 
 Next area of work in no particular order:
  - New index for SPDK
  - Blob pool/dynamic blob handle cache
  - SPDK buffe pool
  - Extend S3 support
-    - Auth
     - MPU
     - Range request
     - Checksums
@@ -69,6 +68,7 @@ Lobos require a configuration file. That looks like:
 [entry]
 # backend=spdk_blobstore          # other accepted: filesystem
 backend=filesystem
+listen_ip=0.0.0.0
 port=8080                       # port lobos listens on
 http_threads = 8                # numbers of beast threasd
 # Pin beast threads to CPU cores:
@@ -76,6 +76,11 @@ http_threads = 8                # numbers of beast threasd
 # n-m for a range
 # n,m,o to specify cores
 http_threads_cores = 1-8
+# If either of those is empty, auth will be disabled
+# note that lobos will not allow to listen to anything
+# but 127.0.0.1 unless auth is enabled.
+access_key=lobos
+secret_key=lobos
 
 [filesystem]
 directory=/mnt/lobos                  # if in filesystem mode, this will use this option as CWD
@@ -85,16 +90,16 @@ directory=/mnt/lobos                  # if in filesystem mode, this will use thi
 # with malloc a 16MiB malloc bdev will be created
 device=0000:c1:00.0
 # device = malloc 
-cluster_sz = 32768             # see: https://spdk.io/doc/blob.html - this is v. important
+cluster_sz = 32768             # see: https://spdk.io/doc/blob.html
 log_level = debug               # debug/none supported only currently
 reactor_core = 0                # SPDK pins its thread to a CPU core
 # SPDK polls by defaut, it can be switched to interrupt
 # mode, it's particularly to avoid spinning the CPU 
 # during dev/testing. For max performance do not set.
 # interrupt_mode=true
-max_use_pct=95                 # Lobos will go read only if usage goes above 95%
+max_use_pct=95
 ```
-Pinning and threads configuration is not required but recommended if you want the highest performance (and avoid SMT cores if possible).
+Pinning and threads configuration is not required but recommended if you want the highest performance (and avoid SMT cores, if possible).
 
 ### Launching in filesystem:
 
@@ -126,20 +131,6 @@ $ aws --endpoint-url http://127.0.0.1:8080 s3 ls s3://demo/src/
 2025-12-03 05:46:36        291 boost_1_90_0
 2026-01-03 16:07:09       4525 lobos.cpp
 2026-01-03 16:07:13     342480 lobos.o
-```
-
-Since there's no auth, you can also just use curl:
-
-```bash
-$ time aws --endpoint-url http://127.0.0.1:8080 s3 ls s3://demo/src/ > /dev/null
-real	0m0.602s
-user	0m0.403s
-sys	0m0.072s
-
-$ time curl -s http://127.0.0.1:8080/demo/src/ > /dev/null
-real	0m0.123s
-user	0m0.004s
-sys	0m0.002s
 ```
 
 ### Launching in SPDK mode
