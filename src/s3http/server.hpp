@@ -17,6 +17,7 @@
 #include <thread>
 #include <unordered_set>
 
+#include "types.hpp" 
 #include "../index/index.hpp"
 #include "../store/store.hpp"
 #include "../store/buffer.hpp"
@@ -58,6 +59,8 @@ public:
         auto const pos = dir.rfind("/");
         bucket_name = dir.substr(pos + 1);
 
+        active_mpus_ = store_->get_active_mpus();
+
     }
     ~S3HttpServer() {};
 
@@ -90,6 +93,8 @@ private:
 
     asio::awaitable<bool> auth_request(const http::request<http::buffer_body>& req);
 
+    std::unordered_map<std::string, Multipart> active_mpus_;
+
     asio::awaitable<http::message_generator> handle_get_object(beast::string_view object, 
         http::request<http::buffer_body>&& req,
         std::shared_ptr<session_buffer> session_buffer);
@@ -100,10 +105,17 @@ private:
         std::shared_ptr<session_buffer> session_buffer);
     asio::awaitable<http::message_generator> handle_put_object(beast::string_view object,
         http::request<http::buffer_body>&& req);
+    asio::awaitable<http::message_generator> handle_create_mpu(beast::string_view object,
+        http::request<http::buffer_body>&& req);
+    asio::awaitable<http::message_generator> handle_complete_mpu(std::string upload_id, 
+        http::request<http::buffer_body>&& req,
+        std::shared_ptr<session_buffer> session_buffer);
 
     http::message_generator not_found_bucket_res(beast::string_view bucket, http::request<http::buffer_body>&& req);
     http::message_generator not_found_key_res(beast::string_view object, http::request<http::buffer_body>&& req);
     http::message_generator forbidden_res(http::request<http::buffer_body>&& req);
+    http::message_generator bad_request_res(std::string code, std::string msg, http::request<http::buffer_body>&& req);
+    http::message_generator internal_err_res(http::request<http::buffer_body>&& req);
 
     std::shared_ptr<session_buffer> make_buffer(size_t size) {
         if (conf_.use_spdk)

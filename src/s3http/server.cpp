@@ -2,14 +2,19 @@
 #include <pthread.h>
 #include <sched.h>
 #include <set>
+#include <sstream>
 
 #include <boost/filesystem.hpp>
 #include <boost/range/iterator_range.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/url.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/xml_parser.hpp>
 
 #include <openssl/sha.h>
 #include <openssl/hmac.h>
+#include <openssl/rand.h>
+#include <openssl/evp.h>
 
 #include "server.hpp"
 
@@ -123,6 +128,28 @@ std::string hmactohex(const std::vector<unsigned char>& key) {
     return ss.str();
 }
 
+std::string md5_hex(const uint8_t* data, size_t len) {
+    unsigned char hash[EVP_MAX_MD_SIZE];
+    unsigned int hash_len = 0;
+
+    // Create a message digest context
+    EVP_MD_CTX* context = EVP_MD_CTX_new();
+
+    if (context != nullptr) {
+        if (EVP_DigestInit_ex(context, EVP_md5(), nullptr) &&
+            EVP_DigestUpdate(context, data, len) &&
+            EVP_DigestFinal_ex(context, hash, &hash_len)) {
+        }
+        EVP_MD_CTX_free(context);
+    }
+
+    std::stringstream ss;
+    for (unsigned int i = 0; i < hash_len; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+    }
+    return ss.str();
+}
+
 asio::awaitable<bool> S3HttpServer::auth_request(const http::request<http::buffer_body>& req) {
     if (conf_.auth_enabled) {
         auto auth = req["Authorization"];
@@ -180,7 +207,12 @@ asio::awaitable<bool> S3HttpServer::auth_request(const http::request<http::buffe
         std::set<std::string> s;
         while (true) {
             pos_s = query.find('&');
-            s.insert(query.substr(0, pos_s));
+            // if the query is param with no val, we add a trailing =
+            // cause apparently that's how it's done :shrug:
+            auto val = query.substr(0, pos_s);
+            if (!val.empty() && val.find('=') == beast::string_view::npos)
+                val += "=";
+            s.insert(val);
             query.erase(0, pos_s+1);
             if (pos_s == beast::string_view::npos) {
                 query.erase(0);
@@ -248,9 +280,12 @@ void S3HttpServer::sanitize_target_path(std::string& target) {
     if (target.starts_with("/" + bucket_name))
         target.erase(0, bucket_name.size() + 1); // removes `/bucketname`
 
-    // since we know we don't have extra filepath info we remove it all
-    if (target.front() == '?')
-        target.erase();
+    // the query params are stored
+    // into aws_params by now so we just strip 'em
+    auto pos = target.find('?');
+    if (pos != beast::string_view::npos) {
+        target.erase(pos);
+    }
 
     // We have a /something, erase the /
     if (target.front() == PATH_DELIM)
@@ -262,7 +297,7 @@ http::message_generator S3HttpServer::not_found_bucket_res(beast::string_view bu
     http::response<http::string_body> res{http::status::not_found, req.version()};
     res.set(http::field::server, SERVER_NAME);
     res.set(http::field::content_type, "application/xml");
-    res.keep_alive(req.keep_alive());
+    res.keep_alive(false);
     res.body() = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
         "<Error><Code>NoSuchBucket</Code>"
         "<Message>The specified bucket does not exist</Message>"
@@ -276,7 +311,7 @@ http::message_generator S3HttpServer::not_found_key_res(beast::string_view targe
     http::response<http::string_body> res{http::status::not_found, req.version()};
     res.set(http::field::server, SERVER_NAME);
     res.set(http::field::content_type, "application/xml");
-    res.keep_alive(req.keep_alive());
+    res.keep_alive(false);
     res.body() = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
         "<Error><Code>NoSuchKey</Code>"
         "<Message>The resource you requested does not exist</Message>"
@@ -290,11 +325,45 @@ http::message_generator S3HttpServer::forbidden_res(http::request<http::buffer_b
     http::response<http::string_body> res{http::status::forbidden, req.version()};
     res.set(http::field::server, SERVER_NAME);
     res.set(http::field::content_type, "application/xml");
-    res.keep_alive(req.keep_alive());
+    res.keep_alive(false);
     res.body() = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
         "<Error><Code>InvalidAccessKeyId</Code>"
         "<Message></Message>"
         "</Error>";
+    res.prepare_payload();
+    return res;
+}
+
+http::message_generator S3HttpServer::bad_request_res(std::string code, std::string msg, http::request<http::buffer_body>&& req) {
+    http::response<http::string_body> res{http::status::bad_request, req.version()};
+    res.set(http::field::server, SERVER_NAME);
+    res.set(http::field::content_type, "application/xml");
+    res.keep_alive(false);
+    res.body() =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<Error>"
+        "<Code>"+ code +"</Code>"
+        "<Message>"+ msg + "</Message>"
+        "<RequestId>...</RequestId>"
+        "</Error>";
+    res.prepare_payload();
+    return res;
+}
+
+// Apparently on internal server error amzn returns 200 still in some instance:?
+// todo look into that
+http::message_generator S3HttpServer::internal_err_res(http::request<http::buffer_body>&& req) {
+    http::response<http::string_body> res{http::status::internal_server_error, req.version()};
+    res.set(http::field::server, SERVER_NAME);
+    res.set(http::field::content_type, "application/xml");
+    res.keep_alive(false);
+    res.body() =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<Error>"
+        "<Code>InternalError</Code>"
+        "<Message>We encountered an internal error. Please try again.</Message>"
+        "</Error>";
+
     res.prepare_payload();
     return res;
 }
@@ -368,20 +437,87 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_get_object(beast::
     co_return res;
 }
 
+asio::awaitable<http::message_generator> S3HttpServer::handle_complete_mpu(std::string upload_id,
+    http::request<http::buffer_body>&& req, std::shared_ptr<session_buffer> session_buffer) {
+
+    std::string xml(reinterpret_cast<const char*>(session_buffer->data()), session_buffer->size());
+
+    std::vector<int> parts;
+    boost::property_tree::ptree pt;
+    std::istringstream ss(xml);
+    boost::property_tree::read_xml(ss, pt);
+    // We just store the parts in order the user tells us to
+    // assemble them
+    for (auto& part : pt.get_child("CompleteMultipartUpload")) {
+        if (part.first == "Part") {
+            auto part_n = part.second.get<int>("PartNumber");
+            if (!active_mpus_[upload_id].parts.contains(part_n))
+                co_return bad_request_res("InvalidPart",
+                    "One or more of the specified parts could not be found. "
+                    "The part might not have been uploaded, or the specified entity tag might not have matched the part's entity tag."
+                    , std::move(req));
+            parts.push_back(part_n);
+        }
+    }
+    auto rc = co_await store_->do_assemble_mpu(upload_id, active_mpus_[upload_id], parts);
+    if (rc < 0)
+        co_return internal_err_res(std::move(req));
+    std::string key = active_mpus_[upload_id].key;
+    active_mpus_.erase(upload_id);
+
+    http::response<http::string_body> res{http::status::ok, req.version()};
+    res.set(http::field::server, SERVER_NAME);
+    res.keep_alive(req.keep_alive());
+    res.body() =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        " <CompleteMultipartUploadResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+        "<Bucket>" + bucket_name + "</Bucket>"
+        "<Key>" + key + "</Key>"
+        "</CompleteMultipartUploadResult>";
+
+    res.prepare_payload();
+    co_return res;
+}
+
+
+std::string generate_upload_id() {
+    unsigned char buf[16];
+    RAND_bytes(buf, 16);
+    std::stringstream ss;
+    for (int i = 0; i < 16; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)buf[i];
+    }
+    return ss.str();
+}
+
+asio::awaitable<http::message_generator> S3HttpServer::handle_create_mpu(beast::string_view object,
+        http::request<http::buffer_body>&& req) {
+    auto upload_id = generate_upload_id();
+    co_await store_->do_create_mpu(object, upload_id);
+    Multipart mp{
+        object,
+        std::time(nullptr),
+        0,
+    };
+    active_mpus_.insert(std::pair<std::string, Multipart>(upload_id, mp));
+
+    http::response<http::string_body> res{http::status::ok, req.version()};
+    res.set(http::field::server, SERVER_NAME);
+    res.keep_alive(req.keep_alive());
+    res.body() =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<InitiateMultipartUploadResult>"
+        "<Bucket>" + bucket_name + "</Bucket>"
+        "<Key>" + std::string(object) + "</Key>"
+        "<UploadId>"+ upload_id + "</UploadId>"
+        "</InitiateMultipartUploadResult>";
+
+    res.prepare_payload();
+    co_return res;
+}
+
 asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::request<http::buffer_body>&& req, 
     std::shared_ptr<session_buffer> session_buffer) {
-    // Returns a bad request response
-    auto const bad_request_res =
-    [&req](beast::string_view why)
-    {
-        http::response<http::string_body> res{http::status::bad_request, req.version()};
-        res.set(http::field::server, SERVER_NAME);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = std::string(why);
-        res.prepare_payload();
-        return res;
-    };
 
     auto const delete_object_res = 
     [&req]()
@@ -399,6 +535,7 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
         res.set(http::field::server, SERVER_NAME);
         res.set(http::field::content_type, "application/xml");
         res.keep_alive(req.keep_alive());
+
         if (aws_params.contains("versioning")) {
             res.body() =
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -410,6 +547,20 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
             res.body() = 
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                 "<ObjectLockConfiguration></ObjectLockConfiguration>";
+        } else if (aws_params.contains("uploads")) {
+            std::string s = 
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                "<Bucket>" + bucket_name + "</Bucket>";
+            for (auto& it : active_mpus_) {
+                s += 
+                "<Upload>"
+                "<Key>" + it.second.key + "</Key>"
+                "<UploadId>" + it.first + "</UploadId>"
+                "<Initiated>" + to_rfc1123(it.second.init_time) + "</Initiated>"
+                "</Upload>";
+            }
+            s += "</ListMultipartUploadsResult>";
+            res.body() = s;
         } else {
             res.body() = 
                 "<ListAllMyBucketsResult><Buckets>"
@@ -429,14 +580,14 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
     //Store aws' s3 url req params
     std::unordered_map<std::string, std::string> aws_params;
     if (!parse_aws_params(req.target(), aws_params)) {
-        co_return bad_request_res("Malformed request");
+        co_return bad_request_res("InvalidRequest","Malformed request", std::move(req));
     }
 
     // Ensure only / is used as a delimiter 
     auto it = aws_params.find("delimiter");
     if (it != aws_params.end()) {
         if (!it->second.empty() && it->second != std::string(1, PATH_DELIM)) {
-            co_return bad_request_res("/ is the only supported delimiter.");
+            co_return bad_request_res("InvalidRequest", "/ is the only supported delimiter.", std::move(req));
         }
     }
 
@@ -456,6 +607,24 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
     }
 
     if (req.method() == http::verb::put) {
+        bool is_mpu = false;
+        if (aws_params.contains("partNumber") || aws_params.contains("uploadId")) {
+            is_mpu = true;
+            if(!aws_params.contains("partNumber"))
+                co_return bad_request_res("InvalidRequest", "Missing required parameter: partNumber", std::move(req));
+            if(!aws_params.contains("uploadId"))
+                co_return bad_request_res("InvalidRequest", "Missing required parameter: upload_id", std::move(req));
+            int part_number = std::stoi(aws_params["partNumber"]);
+            if (part_number < 1 || part_number > 10000)
+                co_return bad_request_res("InvalidRequest", "partNumber must be between 1 and 10000", std::move(req));
+            auto it = active_mpus_.find(aws_params["uploadId"]);;
+            if (it == active_mpus_.end())
+                co_return bad_request_res("NoSuchUpload", "The specified upload does not exist.", std::move(req));
+            // TODO min body size for MPU
+            // https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
+            // We manipulate target to make it a mpu identifiable object
+            target = ".__lobos__mpus__/" + aws_params["uploadId"] + "_" + aws_params["partNumber"] + "_" + target;
+        }
         auto ret = co_await store_->do_write(target, *session_buffer);
         if (ret < 0) {
             http::response<http::string_body> res{http::status::service_unavailable, req.version()};
@@ -463,9 +632,20 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
             res.keep_alive(req.keep_alive());
             res.prepare_payload();
             co_return res;
-        } 
+        }
+        auto etag = md5_hex(session_buffer->data(), session_buffer->size());
+        if (is_mpu) {
+            Part p {
+                session_buffer->size(),
+                etag,
+            };
+            int part_n = std::stoi(aws_params["partNumber"]);
+            active_mpus_[aws_params["uploadId"]].parts.insert(std::pair<int,Part>(part_n, p));
+        }
+
         http::response<http::string_body> res{http::status::ok, req.version()};
         res.set(http::field::server, SERVER_NAME);
+        res.set(http::field::etag, "\"" + etag + "\"" );
         res.insert("x-amz-object-size", std::to_string(req.body().size));
         res.keep_alive(req.keep_alive());
         res.prepare_payload();
@@ -485,24 +665,78 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
             if (aws_params.contains("versioning") || 
                 aws_params.contains("object-lock") || 
                 aws_params.contains("max-buckets") ||
+                aws_params.contains("uploads") ||
                 aws_params.empty())
                 co_return bucket_ops_res(aws_params);
         } else {
+            if (aws_params.contains("uploadId")) {
+                auto upload_id = aws_params["uploadId"];
+                if (!active_mpus_.contains(upload_id))
+                    co_return bad_request_res("NoSuchUpload", "The specified upload does not exist", std::move(req));
+                http::response<http::string_body> res{http::status::ok, req.version()};
+                res.set(http::field::server, SERVER_NAME);
+                res.set(http::field::content_type, "application/xml");
+                res.keep_alive(req.keep_alive());
+                std::string s =
+                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                    "<ListPartsResult>"
+                    "<Bucket>"+ bucket_name +"</Bucket>"
+                    "<Key>"+ active_mpus_[upload_id].key + "</Key>"
+                    "<UploadId>" + upload_id + "</UploadId>";
+                for (auto& it : active_mpus_[upload_id].parts) {
+                    s += 
+                        "<Part>"
+                        "<PartNumber>" + std::to_string(it.first) + "</PartNumber>"
+                        "<Size>" + std::to_string(it.second.size) + "</Size>"
+                        "</Part>";
+                }
+                s += "</ListPartsResult>";
+                res.body() = s;
+                res.prepare_payload();
+                co_return res;
+            }
             // This is a get object probably?
             co_return co_await handle_get_object(target, std::move(req), session_buffer);
         }
     }
 
     if (req.method() == http::verb::delete_) {
-        auto deleted = co_await store_->do_delete(target);
-        if (!deleted)
-            co_return not_found_key_res(target, std::move(req));
+        if (aws_params.contains("uploadId")) {
+            auto upload_id = aws_params["uploadId"];
+            if (!active_mpus_.contains(upload_id))
+                co_return bad_request_res("NoSuchUpload", "The specified upload does not exist", std::move(req));
+            if (target != active_mpus_[upload_id].key)
+                co_return bad_request_res("NoSuchUpload", "The specified upload does not exist", std::move(req));
 
+            co_await store_->do_abort_mpu(upload_id, active_mpus_[upload_id]);
+            active_mpus_.erase(upload_id);
+        } else {
+            auto deleted = co_await store_->do_delete(target);
+            if (!deleted)
+                co_return not_found_key_res(target, std::move(req));
+        }
         co_return delete_object_res();
     }
 
+    if (req.method() == http::verb::post) {
+        // new mpu
+        if (aws_params.contains("uploads")) {
+            co_return co_await handle_create_mpu(target, std::move(req));
+        }
+        // complete mpu
+        if (aws_params.contains("uploadId")) {
+            auto upload_id = aws_params["uploadId"];
+            if (!active_mpus_.contains(upload_id))
+                co_return bad_request_res("NoSuchUpload", "The specified upload does not exist", std::move(req));
+            if (target != active_mpus_[upload_id].key)
+                co_return bad_request_res("NoSuchUpload", "The specified upload does not exist", std::move(req));
+
+            co_return co_await handle_complete_mpu(upload_id, std::move(req), session_buffer);
+        }
+    }
+
     std::cout << "unsupported req: " << req.method() << " " << req.target() << std::endl;
-    co_return bad_request_res("unsupported req");
+    co_return bad_request_res("InvalidRequest", "unsupported req", std::move(req));
 }
 
 // Handles an HTTP server connection
@@ -527,7 +761,7 @@ asio::awaitable<void> S3HttpServer::do_session(beast::tcp_stream stream) {
             continue;
         }
 
-        if (parser.get().method() == http::verb::put) {
+        if (parser.get().method() == http::verb::put || parser.get().method() == http::verb::post) {
             std::string target = parser.get().target();
             sanitize_target_path(target);
             auto content_length = parser.content_length().value_or(0);
