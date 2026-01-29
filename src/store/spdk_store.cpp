@@ -482,13 +482,10 @@ asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string upload_id, Multipart
         rc  = co_await do_read(k, 0, part_buffer);
         if (rc < 0)
             co_return rc;
-        std::cout << "read: " << k << " - first byte: " << (int)part_buffer.data()[0] << std::endl;
         memcpy(buffer->data() + offset, part_buffer.data(), part_buffer.size());
 
-        std::cout << "after memcpuy" << std::endl;
         offset += part_buffer.size();
     }
-    std::cout << "doing write" << std::endl;
     rc = co_await write_data(ioctx.get());
     if (rc <0)
         co_return rc;

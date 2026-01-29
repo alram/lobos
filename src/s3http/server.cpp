@@ -425,7 +425,6 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_get_object(beast::
     size_t read_end = 0;
     auto const it = req.find(http::field::range);
     if (it != req.end()) {
-        std::cout << "value: " << it->value() << std::endl;
         if(!it->value().starts_with("bytes="))
             co_return bad_request_res("InvalidRequest", "Specified Range request is invalid", std::move(req));
 
@@ -484,7 +483,6 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_complete_mpu(std::
     for (auto& part : pt.get_child("CompleteMultipartUpload")) {
         if (part.first == "Part") {
             auto part_n = part.second.get<int>("PartNumber");
-            std::cout << "found part: " << part_n << std::endl;
             if (!active_mpus_[upload_id].parts.contains(part_n))
                 co_return bad_request_res("InvalidPart",
                     "One or more of the specified parts could not be found. "
@@ -493,7 +491,6 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_complete_mpu(std::
             parts.push_back(part_n);
         }
     }
-    std::cout << "call do_assemble_mpu" << std::endl;
     auto rc = co_await store_->do_assemble_mpu(upload_id, active_mpus_[upload_id], parts);
     if (rc < 0)
         co_return internal_err_res(std::move(req));
@@ -798,7 +795,6 @@ asio::awaitable<void> S3HttpServer::do_session(beast::tcp_stream stream) {
         }
 
         if (parser.get().method() == http::verb::put || parser.get().method() == http::verb::post) {
-            std::cout << "received put or get" << std::endl;
             std::string target = parser.get().target();
             sanitize_target_path(target);
             auto content_length = parser.content_length().value_or(0);
