@@ -12,7 +12,7 @@ The parsing is pretty naive so things can get broken quick but the following see
  - HeadBucket
  - ListObjectsV2 (no max-keys)
  - HeadObject
- - GetObject (no range)
+ - GetObject (including Range request)
  - PutObject (including MPU)
  - DeleteObject
 
@@ -25,7 +25,6 @@ Next area of work in no particular order:
  - Blob pool/dynamic blob handle cache
  - SPDK buffe pool
  - Extend S3 support
-    - Range request
     - Checksums
     - Object versioning
     - Object tagging

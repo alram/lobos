@@ -413,15 +413,48 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_list_objects(beast
 
 // TODO - get/put should handle chunks for large IO however this will require
 // a lot of changes so for now we dont
-asio::awaitable<http::message_generator> S3HttpServer::handle_get_object(beast::string_view object, http::request<http::buffer_body>&& req, std::shared_ptr<session_buffer> session_buffer) {
-    auto [size, last_modified] = co_await store_->do_metadata_req(object);
+asio::awaitable<http::message_generator> S3HttpServer::handle_get_object(beast::string_view object,
+    http::request<http::buffer_body>&& req, std::shared_ptr<session_buffer> session_buffer) {
 
+    auto [size_md, last_modified] = co_await store_->do_metadata_req(object);
     if (last_modified == 0)
         co_return not_found_key_res(object, std::move(req));
-    
+
+    // Check if it has a range header
+    size_t offset = 0;
+    size_t read_end = 0;
+    auto const it = req.find(http::field::range);
+    if (it != req.end()) {
+        std::cout << "value: " << it->value() << std::endl;
+        if(!it->value().starts_with("bytes="))
+            co_return bad_request_res("InvalidRequest", "Specified Range request is invalid", std::move(req));
+
+        beast::string_view range = it->value().substr(strlen("bytes="));
+        auto pos = range.find("-");
+        if (pos == beast::string_view::npos)
+            co_return bad_request_res("InvalidRequest", "Specified Range request is invalid", std::move(req));
+        offset = std::stoi(range.substr(0, pos));
+        // it's valid to have a range like bytes=<offset>-
+        // so we check if empty;
+        auto read_end_sv = range.substr(pos+1);
+        if(!read_end_sv.empty())
+            read_end = std::stoi(read_end_sv);
+    }
+
+    size_t size = 0;
+    // TODO this should be a 416 but i need to refactor the whole error stuff
+    if (offset > size_md)
+        co_return bad_request_res("InvalidRequest", "Specified Range request is invalid", std::move(req));
+
+    if (read_end == 0) {
+        size = size_md - offset;
+    } else {
+        size = read_end - offset + 1; //inclusive so we add +1
+    }
     session_buffer->resize(size);
+
     //todo check return
-    co_await store_->do_read(object, 0, *session_buffer);
+    co_await store_->do_read(object, offset, *session_buffer);
 
     http::response<http::buffer_body> res{http::status::ok, req.version()};
     res.set(http::field::server, SERVER_NAME);
