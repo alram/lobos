@@ -12,6 +12,6 @@ struct Part {
 struct Multipart {
     std::string key;
     time_t init_time;
-    size_t current_size;
+    size_t current_size = 0;
     std::map<int, Part> parts{};
 };

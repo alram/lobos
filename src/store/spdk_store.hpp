@@ -87,16 +87,18 @@ struct IoCtx {
     std::unique_ptr<BlobMetadata> md;
 
     spdk_blob_id blob_id;
-    size_t size;
     spdk_blob* blob;
-    uint64_t offset;
+    uint64_t offset = 0;
+
+    // defines whether we close the blob on 
+    // successful write
+    bool close = true;
 
     IoCtx() = default;
 
     IoCtx(session_buffer& buf)
         :
         buffer(&buf)
-        , size(buf.size())
     {}
 };
 

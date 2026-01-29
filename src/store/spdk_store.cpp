@@ -199,8 +199,8 @@ asio::awaitable<int> SpdkStore::create_and_size_blob(IoCtx* ioctx) {
                 if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
                 ctx->ioctx->blob = blob;
                 auto cluster_size = spdk_bs_get_cluster_size(ctx->store->bs_);
-                uint64_t clusters = ctx->ioctx->size / cluster_size;
-                if(ctx->ioctx->size % cluster_size != 0) {
+                uint64_t clusters = ctx->ioctx->buffer->size() / cluster_size;
+                if(ctx->ioctx->buffer->size() % cluster_size != 0) {
                     clusters++;
                 }
                 // Write xattrs, this is sync. TOOD Check for errs
@@ -226,19 +226,34 @@ asio::awaitable<int> SpdkStore::create_and_size_blob(IoCtx* ioctx) {
 asio::awaitable<int> SpdkStore::write_data(IoCtx* ioctx) {
     if (!ioctx->blob_id || !ioctx->blob)
         co_return -ENOENT;
-    
+    int size = ioctx->buffer->size();
     co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, ioctx](auto complete) {
         auto ctx = new BlobOpCtx{this, ioctx, std::move(complete)};
-        uint64_t write_size = ctx->ioctx->size / ctx->store->io_unit_size_;
-        if (ctx->ioctx->size % ctx->store->io_unit_size_ != 0) {
+        uint64_t write_size = ctx->ioctx->buffer->size() / ctx->store->io_unit_size_;
+        if (ctx->ioctx->buffer->size() % ctx->store->io_unit_size_ != 0) {
             write_size++;
         }
+        uint64_t offset_units = ctx->ioctx->offset / ctx->store->io_unit_size_;
         spdk_blob_io_write(ctx->ioctx->blob, 
             ctx->store->io_channel_, 
-            ctx->ioctx->buffer->data(), 0, write_size,
+            ctx->ioctx->buffer->data(), offset_units, write_size,
             [](void *cb_arg, int bserrno) {
                 auto ctx = static_cast<BlobOpCtx*>(cb_arg);
-                if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
+                if (bserrno) {
+                    std::cerr << "write failed: " << bserrno 
+                            << " offset: " << ctx->ioctx->offset
+                            << " size: " << ctx->ioctx->buffer->size()
+                            << " blob: " << (void*)ctx->ioctx->blob
+                            << " blob_id: " << ctx->ioctx->blob_id
+                            << std::endl;
+                    ctx->complete(bserrno); 
+                    delete ctx; 
+                    return; 
+                }
+                if (!ctx->ioctx->close) {
+                    ctx->complete(0);
+                    return;
+                }
                 spdk_blob_close(ctx->ioctx->blob, [](void *cb_arg, int bserrno) {
                     auto ctx = static_cast<BlobOpCtx*>(cb_arg);
                     if (bserrno)
@@ -255,15 +270,14 @@ asio::awaitable<int> SpdkStore::write_data(IoCtx* ioctx) {
         }, ctx); // spdk_blob_io_write
     });
 
-    co_return 0;
+    co_return size;
 }
 
 asio::awaitable<int> SpdkStore::do_write(std::string o, session_buffer& buffer) {
-    // TODO old blob shit
     auto ioctx = new IoCtx(buffer);
     ioctx->key = o;
     ioctx->md = std::make_unique<BlobMetadata>();
-    ioctx->md->size = ioctx->size;
+    ioctx->md->size = ioctx->buffer->size();
     ioctx->md->last_modified = std::time(nullptr);
 
     spdk_blob_id old_blob_id = 0;
@@ -278,11 +292,13 @@ asio::awaitable<int> SpdkStore::do_write(std::string o, session_buffer& buffer) 
     if (rc <0)
         co_return rc;
 
-    co_await write_data(ioctx);
+    rc = co_await write_data(ioctx);
 
     if (old_blob_id != 0) {
         do_delete_async(old_blob_id);
     }
+
+    co_return rc;
 }
 
 asio::awaitable<int> SpdkStore::do_read(std::string o, uint64_t offset, session_buffer& buffer) {
@@ -302,11 +318,12 @@ asio::awaitable<int> SpdkStore::do_read(std::string o, uint64_t offset, session_
             auto ctx = static_cast<BlobOpCtx*>(cb_arg);
             if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
             ctx->ioctx->blob = blob;
+            uint64_t offset_units = ctx->ioctx->offset / ctx->store->io_unit_size_;
             uint64_t io_units = ctx->ioctx->buffer->size() / ctx->store->io_unit_size_;
             if (ctx->ioctx->buffer->size() % ctx->store->io_unit_size_ != 0) {
                 io_units++;
             }
-            spdk_blob_io_read(blob, ctx->store->io_channel_, ctx->ioctx->buffer->data(), ctx->ioctx->offset, io_units, [](void *cb_arg, int bserrno) {
+            spdk_blob_io_read(blob, ctx->store->io_channel_, ctx->ioctx->buffer->data(), offset_units, io_units, [](void *cb_arg, int bserrno) {
                 auto ctx = static_cast<BlobOpCtx*>(cb_arg);
                 if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
                 spdk_blob_close(ctx->ioctx->blob, [](void *cb_arg, int bserrno) {
@@ -406,7 +423,6 @@ std::unordered_map<std::string, Multipart> SpdkStore::get_active_mpus() {
             }
         } else {
             std::string upload_id = object_name.substr(0, pos);
-            std::cout << "object_name in part: " << object_name << std::endl;
             object_name.erase(0, pos+1);
             pos = object_name.find('_');
             int part_number = std::stoi(object_name.substr(0, pos));
@@ -442,6 +458,49 @@ asio::awaitable<int> SpdkStore::do_create_mpu(std::string_view o, std::string up
 }
 
 asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string upload_id, Multipart mp, std::vector<int> parts) {
+    spdk_buffer buffer(mp.current_size);
+    auto ioctx = new IoCtx(buffer);
+    ioctx->key = mp.key;
+    ioctx->md = std::make_unique<BlobMetadata>();
+    ioctx->md->size = mp.current_size;
+    ioctx->md->last_modified = std::time(nullptr);
+    ioctx->close = false;
+
+    // blob is sized to fit all the parts
+    auto rc = co_await create_and_size_blob(ioctx);
+    if (rc < 0)
+        co_return rc;
+    
+    size_t count = 0;
+    for (auto& part : parts) {
+        count++;
+        // if this is the last part we tell the next write
+        // to close the blob
+        if (count == parts.size())
+            ioctx->close = true;
+
+        auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part) + "_" + mp.key;
+
+        ioctx->buffer->resize_clear(mp.parts[part].size);
+        
+        rc  = co_await do_read(k, 0, *ioctx->buffer);
+        if (rc < 0)
+            co_return rc;
+        rc = co_await write_data(ioctx);
+        if (rc <0)
+            co_return rc;
+
+        ioctx->offset += mp.parts[part].size;
+    }
+
+    for (const auto& part : mp.parts) {
+        auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key;
+        do_delete_async(index_->index[k].blob_id);
+    }
+
+    auto init_key = lobos_mpu_prefix + "/" + mp.key + "_" + upload_id + "_initiated";
+    co_await do_delete(init_key);
+
     co_return 0;
 }
 

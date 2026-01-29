@@ -15,7 +15,7 @@ The parsing is pretty naive so things can get broken quick but the following see
  - GetObject (no range)
  - PutObject
  - DeleteObject
- - MPU (FS only)
+ - MPU
 
  Benchmark tools `elbencho` and `warp` work as well (but checksums aren't supported)
 
@@ -26,7 +26,6 @@ Next area of work in no particular order:
  - Blob pool/dynamic blob handle cache
  - SPDK buffe pool
  - Extend S3 support
-    - MPU (SPDK)
     - Range request
     - Checksums
     - Object versioning

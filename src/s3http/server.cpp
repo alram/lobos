@@ -415,7 +415,7 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_list_objects(beast
 // a lot of changes so for now we dont
 asio::awaitable<http::message_generator> S3HttpServer::handle_get_object(beast::string_view object, http::request<http::buffer_body>&& req, std::shared_ptr<session_buffer> session_buffer) {
     auto [size, last_modified] = co_await store_->do_metadata_req(object);
-    
+
     if (last_modified == 0)
         co_return not_found_key_res(object, std::move(req));
     
@@ -641,6 +641,7 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
             };
             int part_n = std::stoi(aws_params["partNumber"]);
             active_mpus_[aws_params["uploadId"]].parts.insert(std::pair<int,Part>(part_n, p));
+            active_mpus_[aws_params["uploadId"]].current_size += ret;
         }
 
         http::response<http::string_body> res{http::status::ok, req.version()};

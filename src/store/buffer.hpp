@@ -14,6 +14,7 @@ public:
     virtual const uint8_t* data() const = 0;
     virtual size_t size() const = 0;
     virtual void resize(size_t new_size) = 0;
+    virtual void resize_clear(size_t new_size) = 0;
     virtual void append(const uint8_t* data, size_t len) = 0;
     virtual void append(std::string_view sv) {
         append(reinterpret_cast<const uint8_t*>(sv.data()), sv.size());
@@ -29,6 +30,7 @@ public:
     const uint8_t* data() const override { return buf_.data(); }
     size_t size() const override { return buf_.size(); }
     void resize(size_t new_size) override { buf_.resize(new_size); }
+    void resize_clear(size_t) {}; //We don't need an impl for vectors 
     void append(const uint8_t* data, size_t len) override {
         buf_.insert(buf_.end(), data, data + len);
     }
@@ -95,6 +97,18 @@ public:
                 throw std::bad_alloc();
             if(data_)
                 memcpy(n_data, data_, std::min(size_, n_size));
+        }
+        if (data_) spdk_free(data_);
+        data_ = n_data;
+        size_ = n_size;
+    }
+    void resize_clear(size_t n_size) {
+        if (n_size == size_) return;
+        uint8_t* n_data = nullptr;
+        if (n_size > 0) {
+            n_data = static_cast<uint8_t*>(spdk_malloc(n_size, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA));
+            if (!n_data)
+                throw std::bad_alloc();
         }
         if (data_) spdk_free(data_);
         data_ = n_data;
