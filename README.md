@@ -13,9 +13,8 @@ The parsing is pretty naive so things can get broken quick but the following see
  - ListObjectsV2 (no max-keys)
  - HeadObject
  - GetObject (no range)
- - PutObject
+ - PutObject (including MPU)
  - DeleteObject
- - MPU
 
  Benchmark tools `elbencho` and `warp` work as well (but checksums aren't supported)
 
