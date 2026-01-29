@@ -113,6 +113,8 @@ public:
 
     void init_store(std::string devSpec) override;
     asio::awaitable<int> do_write(std::string o, session_buffer& buffer) override;
+    asio::awaitable<int> create_and_size_blob(IoCtx* ioctx);
+    asio::awaitable<int> write_data(IoCtx* ioctx);
     asio::awaitable<int> do_read(std::string o, uint64_t offset, session_buffer& buffer) override;
     asio::awaitable<bool> do_delete(std::string_view o) override;
     asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string_view o) override;
