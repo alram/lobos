@@ -14,6 +14,7 @@ public:
     virtual const uint8_t* data() const = 0;
     virtual size_t size() const = 0;
     virtual void resize(size_t new_size) = 0;
+    // resize does not copy data over
     virtual void resize_clear(size_t new_size) = 0;
     virtual void append(const uint8_t* data, size_t len) = 0;
     virtual void append(std::string_view sv) {
@@ -30,7 +31,10 @@ public:
     const uint8_t* data() const override { return buf_.data(); }
     size_t size() const override { return buf_.size(); }
     void resize(size_t new_size) override { buf_.resize(new_size); }
-    void resize_clear(size_t) {}; //We don't need an impl for vectors 
+    void resize_clear(size_t new_size) {
+        // afaik there's no way to avoid copy with std::vector
+        buf_.resize(new_size);
+    };
     void append(const uint8_t* data, size_t len) override {
         buf_.insert(buf_.end(), data, data + len);
     }
@@ -45,12 +49,21 @@ public:
     explicit spdk_buffer(size_t size)
         : size_(size)
         , cap_(size)
-        , data_(size > 0 
-            ? static_cast<uint8_t*>(spdk_malloc(size, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA))
-            : nullptr)
     {
+        if (size > 0) {
+            size_t alloc_size =  ((size + 4095) / 4096) * 4096;
+            if (alloc_size == 0) alloc_size = 4096;
+            cap_ = alloc_size;
+
+            data_ = static_cast<uint8_t*>(
+                spdk_malloc(alloc_size, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA));
+        } else {
+            data_ = nullptr;
+        }
+
         if (!data_ && size > 0)
             throw std::bad_alloc();
+
     }
 
     ~spdk_buffer() {
@@ -102,16 +115,20 @@ public:
         data_ = n_data;
         size_ = n_size;
     }
+    
     void resize_clear(size_t n_size) {
-        if (n_size == size_) return;
-        uint8_t* n_data = nullptr;
-        if (n_size > 0) {
-            n_data = static_cast<uint8_t*>(spdk_malloc(n_size, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA));
-            if (!n_data)
+        size_t alloc_size = ((n_size + 4095) / 4096) * 4096;
+        if (alloc_size == 0) alloc_size = 4096;
+        
+        if (alloc_size > cap_) {
+            if (data_) spdk_free(data_);
+            data_ = static_cast<uint8_t*>(
+                spdk_malloc(alloc_size, 0x1000, nullptr, SPDK_ENV_NUMA_ID_ANY, SPDK_MALLOC_DMA));
+            if (!data_)
                 throw std::bad_alloc();
+            cap_ = alloc_size;
         }
-        if (data_) spdk_free(data_);
-        data_ = n_data;
+        
         size_ = n_size;
     }
 

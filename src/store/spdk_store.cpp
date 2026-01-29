@@ -227,6 +227,7 @@ asio::awaitable<int> SpdkStore::write_data(IoCtx* ioctx) {
     if (!ioctx->blob_id || !ioctx->blob)
         co_return -ENOENT;
     int size = ioctx->buffer->size();
+
     co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, ioctx](auto complete) {
         auto ctx = new BlobOpCtx{this, ioctx, std::move(complete)};
         uint64_t write_size = ctx->ioctx->buffer->size() / ctx->store->io_unit_size_;
@@ -247,7 +248,6 @@ asio::awaitable<int> SpdkStore::write_data(IoCtx* ioctx) {
                             << " blob_id: " << ctx->ioctx->blob_id
                             << std::endl;
                     ctx->complete(bserrno); 
-                    delete ctx; 
                     return; 
                 }
                 if (!ctx->ioctx->close) {
@@ -265,7 +265,6 @@ asio::awaitable<int> SpdkStore::write_data(IoCtx* ioctx) {
                         ctx->ioctx->blob_id,
                     });
                     ctx->complete(0);
-                    delete ctx;
                 }, ctx); // spdk_blob_close
         }, ctx); // spdk_blob_io_write
     });
@@ -274,7 +273,7 @@ asio::awaitable<int> SpdkStore::write_data(IoCtx* ioctx) {
 }
 
 asio::awaitable<int> SpdkStore::do_write(std::string o, session_buffer& buffer) {
-    auto ioctx = new IoCtx(buffer);
+    auto ioctx = std::make_unique<IoCtx>(buffer);
     ioctx->key = o;
     ioctx->md = std::make_unique<BlobMetadata>();
     ioctx->md->size = ioctx->buffer->size();
@@ -288,11 +287,11 @@ asio::awaitable<int> SpdkStore::do_write(std::string o, session_buffer& buffer) 
         index_->index.erase(it);  // oh boy lets hope the write doesn't fail TODO
     }
 
-    auto rc = co_await create_and_size_blob(ioctx);
+    auto rc = co_await create_and_size_blob(ioctx.get());
     if (rc <0)
         co_return rc;
 
-    rc = co_await write_data(ioctx);
+    rc = co_await write_data(ioctx.get());
 
     if (old_blob_id != 0) {
         do_delete_async(old_blob_id);
@@ -457,41 +456,42 @@ asio::awaitable<int> SpdkStore::do_create_mpu(std::string_view o, std::string up
     co_return co_await do_write(key, buff);
 }
 
+// TODO eventually do something better here
+// we read all the objects and copy them in a buffer
+// then write the whole thing because io misaligned with io units
+// are messing up the whole thing
+// Needs to be reworked to be efficient
 asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string upload_id, Multipart mp, std::vector<int> parts) {
-    spdk_buffer buffer(mp.current_size);
-    auto ioctx = new IoCtx(buffer);
+    auto buffer = std::make_unique<spdk_buffer>(mp.current_size);
+    auto ioctx = std::make_unique<IoCtx>(*buffer);
+
     ioctx->key = mp.key;
     ioctx->md = std::make_unique<BlobMetadata>();
     ioctx->md->size = mp.current_size;
     ioctx->md->last_modified = std::time(nullptr);
-    ioctx->close = false;
 
     // blob is sized to fit all the parts
-    auto rc = co_await create_and_size_blob(ioctx);
+    auto rc = co_await create_and_size_blob(ioctx.get());
     if (rc < 0)
         co_return rc;
     
-    size_t count = 0;
+    size_t offset =0;
     for (auto& part : parts) {
-        count++;
-        // if this is the last part we tell the next write
-        // to close the blob
-        if (count == parts.size())
-            ioctx->close = true;
-
         auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part) + "_" + mp.key;
-
-        ioctx->buffer->resize_clear(mp.parts[part].size);
-        
-        rc  = co_await do_read(k, 0, *ioctx->buffer);
+        spdk_buffer part_buffer(mp.parts[part].size);
+        rc  = co_await do_read(k, 0, part_buffer);
         if (rc < 0)
             co_return rc;
-        rc = co_await write_data(ioctx);
-        if (rc <0)
-            co_return rc;
+        std::cout << "read: " << k << " - first byte: " << (int)part_buffer.data()[0] << std::endl;
+        memcpy(buffer->data() + offset, part_buffer.data(), part_buffer.size());
 
-        ioctx->offset += mp.parts[part].size;
+        std::cout << "after memcpuy" << std::endl;
+        offset += part_buffer.size();
     }
+    std::cout << "doing write" << std::endl;
+    rc = co_await write_data(ioctx.get());
+    if (rc <0)
+        co_return rc;
 
     for (const auto& part : mp.parts) {
         auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key;
