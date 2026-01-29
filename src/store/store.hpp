@@ -21,5 +21,8 @@ public:
     virtual asio::awaitable<int> do_create_mpu(std::string_view o, std::string upload_id) = 0;
     virtual std::unordered_map<std::string, Multipart> get_active_mpus() = 0;
     virtual asio::awaitable<int> do_assemble_mpu(std::string upload_id, Multipart mp, std::vector<int> parts) = 0;
-    virtual asio::awaitable<int> do_abort_mpu(std::string upload_id, Multipart mp) = 0;
+    virtual asio::awaitable<int> do_abort_mpu(std::string upload_id, Multipart mp) = 0;\
+protected:
+    std::string lobos_state_prefix = ".__lobos__";
+    std::string lobos_mpu_prefix = lobos_state_prefix + "mpus__";
 };

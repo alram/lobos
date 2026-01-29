@@ -150,6 +150,7 @@ asio::awaitable<void> SpdkStore::do_list(std::string_view prefix, session_buffer
 
     for(; it != index_->index.end(); it++) {
         if (!it->first.starts_with(prefix)) break;
+        if (it->first.starts_with(lobos_state_prefix)) continue;
         std::string s;
         // if the element contains `/` its a dir so we just display the common prefix thing
         auto key_comp = it->first;
@@ -359,6 +360,85 @@ asio::awaitable<std::tuple<size_t, time_t>> SpdkStore::do_metadata_req(std::stri
         co_return std::tuple<size_t, time_t>{it->second.size, it->second.last_modified};
     }
     co_return std::tuple<size_t, time_t>{0,0};
+}
+
+std::unordered_map<std::string, Multipart> SpdkStore::get_active_mpus() {
+    std::unordered_map<std::string, Multipart> active_mpus = {};
+
+    auto it = index_->index.lower_bound(lobos_mpu_prefix);
+    for (;it != index_->index.end();it++) {
+        if (!it->first.starts_with(lobos_mpu_prefix))
+            break;
+        std::string object_name = it->first.substr(lobos_mpu_prefix.length() + 1);
+        auto pos = object_name.find('_');
+
+        if (object_name.find("initiated") != std::string_view::npos) {
+            std::string key = object_name.substr(0, pos);
+            object_name.erase(0, pos+1);
+            pos = object_name.find('_');
+            std::string upload_id = object_name.substr(0, pos);
+
+            if (!active_mpus.contains(upload_id)) {
+                Multipart mp{
+                    key,
+                    it->second.last_modified,
+                    0,
+                };
+                active_mpus.insert(std::pair<std::string, Multipart>(upload_id, mp));
+            } else {
+                active_mpus[upload_id].init_time = it->second.last_modified;
+            }
+        } else {
+            std::string upload_id = object_name.substr(0, pos);
+            std::cout << "object_name in part: " << object_name << std::endl;
+            object_name.erase(0, pos+1);
+            pos = object_name.find('_');
+            int part_number = std::stoi(object_name.substr(0, pos));
+            object_name.erase(0, pos+1);
+            std::string key = object_name;
+
+            Part p{
+                it->second.size,
+                "0" //TODO etag
+            };
+            
+            if(!active_mpus.contains(upload_id)) {
+                // create it, we'll update what is needed when we come up to the init object
+                Multipart mp{
+                    key,
+                    0,
+                    0,
+                };
+                active_mpus.insert(std::pair<std::string, Multipart>(upload_id, mp));
+            }
+            active_mpus[upload_id].parts.insert(std::pair<int,Part>(part_number, p));
+            active_mpus[upload_id].current_size += it->second.size;
+        }
+    }
+    return active_mpus;
+}
+
+asio::awaitable<int> SpdkStore::do_create_mpu(std::string_view o, std::string uploadId) {
+    spdk_buffer buff(0);
+    std::string key = lobos_mpu_prefix + "/"  + o.data() + "_" + uploadId + "_initiated";
+
+    co_return co_await do_write(key, buff);
+}
+
+asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string upload_id, Multipart mp, std::vector<int> parts) {
+    co_return 0;
+}
+
+asio::awaitable<int> SpdkStore::do_abort_mpu(std::string upload_id, Multipart mp) {
+    for (const auto& part : mp.parts) {
+        auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key;
+        do_delete_async(index_->index[k].blob_id);
+    }
+
+    auto init_key = lobos_mpu_prefix + "/" + mp.key + "_" + upload_id + "_initiated";
+    co_await do_delete(init_key);
+
+    co_return 0;
 }
 
 void SpdkStore::get_blob_metadata(spdk_blob* blob, Object* o, const char*& key) {

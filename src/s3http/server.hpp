@@ -60,7 +60,6 @@ public:
         bucket_name = dir.substr(pos + 1);
 
         active_mpus_ = store_->get_active_mpus();
-
     }
     ~S3HttpServer() {};
 
