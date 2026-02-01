@@ -1,0 +1,10 @@
+protoc --cpp_out=. --grpc_out=.  --plugin=protoc-gen-grpc=/usr/bin/grpc_cpp_plugin loboscontrol.proto
+
+
+g++ -std=c++17 \
+    loboscontrol_server.cc \
+    loboscontrol.pb.cc \
+    loboscontrol.grpc.pb.cc \
+    -o loboscontrol_server \
+    $(pkg-config --cflags --libs grpc++ protobuf) \
+    -lpthread

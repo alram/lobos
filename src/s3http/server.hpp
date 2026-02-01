@@ -21,6 +21,7 @@
 #include "../index/index.hpp"
 #include "../store/store.hpp"
 #include "../store/buffer.hpp"
+#include "../controlplane/loboscontrol_server.hpp"
 
 
 namespace beast = boost::beast;
@@ -31,22 +32,22 @@ namespace lobos::http {
     constexpr beast::string_view server_name = "lobos";
 }
 
-struct httpConfig {
+struct serverConfig {
     std::string address;
     short unsigned int port;
     std::string access_key;
     std::string secret_key;
+    std::string grpc_server;
     bool use_spdk = false;
     bool auth_enabled = true;
 };
 
 class S3HttpServer {
-    friend class S3OpHandler;
 public:
     explicit S3HttpServer(
         std::string dir,
         Store* store,
-        httpConfig c
+        serverConfig c
     )
         : store_(store)
         , conf_(c)
@@ -65,8 +66,13 @@ public:
         bucket_name = dir.substr(pos + 1);
 
         active_mpus_ = store_->get_active_mpus();
+
+        // Start the control plane
+        control_plane_.start(conf_.grpc_server);
     }
-    ~S3HttpServer() {};
+    ~S3HttpServer() {
+        control_plane_.stop();
+    };
 
     void start(int threads, std::vector<int> pins);
     void stop() {
@@ -76,7 +82,8 @@ public:
     }
 private:
     Store* store_;
-    httpConfig conf_;
+    serverConfig conf_;
+    ControlPlaneServer control_plane_;
     std::vector<std::unique_ptr<asio::io_context>> ioctxs_;
     std::vector<std::thread> thread_pool_;
     std::unique_ptr<asio::signal_set> signals_;

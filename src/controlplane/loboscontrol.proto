@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package loboscontrol;
+
+// ControlPlan implements the control plane for Lobos
+service ControlPlane {
+
+    // S3 User management
+
+    // Add user adds an S3 user
+    rpc AddUser (AuthParams) returns (UserReply) {}
+    // ListAllUsers returns a list of all S3 users
+    rpc ListAllUsers (Filters) returns (ListAllUsersReply) {}
+    // ListUser lists all user's infos
+    rpc ListUser(Key) returns (UserReply) {}
+
+    // Etc
+}
+
+message AuthParams {
+  string key = 1;
+  string secret = 2;
+}
+
+message Filters {
+    string message = 1;
+}
+
+message Key {
+    string key = 1;
+}
+
+message ListAllUsersReply {
+    repeated UserReply message = 1;
+}
+
+message UserReply {
+    string message = 1;
+}

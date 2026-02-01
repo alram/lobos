@@ -73,7 +73,7 @@ std::vector<int> parse_threads_input(std::string i) {
     return pins;
 }
 
-bool validate_server_can_run(httpConfig conf) {
+bool validate_server_can_run(serverConfig conf) {
     if (conf.access_key.empty() || conf.secret_key.empty()) {
         // we don't allow no-auth and bind to something else
         if (conf.address != "127.0.0.1")
@@ -91,13 +91,14 @@ int main(int argc, char **argv) {
 
     po::options_description config_options("Configuration");
         config_options.add_options()
-            ("entry.backend", po::value<std::string>()->required())
-            ("entry.listen_ip", po::value<std::string>()->default_value("127.0.0.1"))
-            ("entry.port", po::value<short unsigned int>()->default_value(8080))
-            ("entry.http_threads", po::value<int>()->default_value(8))
-            ("entry.http_threads_cores", po::value<std::string>()->default_value(""))
-            ("entry.access_key", po::value<std::string>()->default_value(""))
-            ("entry.secret_key", po::value<std::string>()->default_value(""))
+            ("lobos.backend", po::value<std::string>()->required())
+            ("lobos.listen_ip", po::value<std::string>()->default_value("127.0.0.1"))
+            ("lobos.port", po::value<short unsigned int>()->default_value(8080))
+            ("lobos.http_threads", po::value<int>()->default_value(8))
+            ("lobos.http_threads_cores", po::value<std::string>()->default_value(""))
+            ("lobos.grpc_server", po::value<std::string>()->default_value("127.0.0.1:50051"))
+            ("lobos.access_key", po::value<std::string>()->default_value(""))
+            ("lobos.secret_key", po::value<std::string>()->default_value(""))
             ("filesystem.directory", po::value<std::string>()->default_value(""))
             ("spdk_blobstore.device", po::value<std::string>()->default_value(""))
             ("spdk_blobstore.cluster_sz", po::value<uint32_t>()->default_value(131072))
@@ -137,11 +138,12 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    httpConfig conf = {
-        vm["entry.listen_ip"].as<std::string>(),
-        vm["entry.port"].as<short unsigned int>(),
-        vm["entry.access_key"].as<std::string>(),
-        vm["entry.secret_key"].as<std::string>(),
+    serverConfig conf = {
+        vm["lobos.listen_ip"].as<std::string>(),
+        vm["lobos.port"].as<short unsigned int>(),
+        vm["lobos.access_key"].as<std::string>(),
+        vm["lobos.secret_key"].as<std::string>(),
+        vm["lobos.grpc_server"].as<std::string>(),
     };
 
     if(!validate_server_can_run(conf))
@@ -151,7 +153,7 @@ int main(int argc, char **argv) {
     std::unique_ptr<SpdkReactor> spdk_reactor;
     std::string bucket = "";
 
-    std::string backend = vm["entry.backend"].as<std::string>();
+    std::string backend = vm["lobos.backend"].as<std::string>();
     if (backend == "spdk_blobstore") {
         conf.use_spdk = true;
         bucket = "lobos";
@@ -187,11 +189,11 @@ int main(int argc, char **argv) {
 
     S3HttpServer server(bucket, store.get(), conf);
 
-    int http_threads = vm["entry.http_threads"].as<int>();
-    std::string pins_s = vm["entry.http_threads_cores"].as<std::string>();
+    int http_threads = vm["lobos.http_threads"].as<int>();
+    std::string pins_s = vm["lobos.http_threads_cores"].as<std::string>();
     std::vector<int> pins{};
     if (!pins_s.empty()) {
-        pins = parse_threads_input(vm["entry.http_threads_cores"].as<std::string>());
+        pins = parse_threads_input(vm["lobos.http_threads_cores"].as<std::string>());
         if (static_cast<size_t>(http_threads) != pins.size()) {
             std::cerr << "Error http_threads and http_threads_cores need to match core count" << std::endl;
             return 1;

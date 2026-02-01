@@ -198,7 +198,7 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
 
     req.insert(lobos::s3::bucket, bucket_name);
 
-    auto op = S3OpHandler(*this->store_, 
+    auto op = S3OpHandler(*store_, 
         std::move(req),
         std::move(session_buffer),
         std::move(target),
