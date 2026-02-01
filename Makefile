@@ -22,7 +22,7 @@ CXXFLAGS += $(COMMON_FLAGS) $(RELEASE_FLAGS)
 # CXXFLAGS += $(COMMON_FLAGS) $(DEBUG_FLAGS)
 LDFLAGS += -flto -Wl,-O1
 
-SRC = src/lobos.cpp src/s3http/server.cpp src/index/index.cpp src/store/spdk_store.cpp src/store/spdk_stats.cpp src/store/fs_store.cpp
+SRC = src/lobos.cpp src/s3http/server.cpp src/s3http/s3_op_handler.cpp src/common/common.cpp src/index/index.cpp src/store/spdk_store.cpp src/store/spdk_stats.cpp src/store/fs_store.cpp
 OBJ = $(SRC:.cpp=.o)
 TARGET = lobos
 

@@ -89,7 +89,7 @@ asio::awaitable<void> FsStore::do_list(std::string_view prefix, session_buffer& 
         } else {
             s = "<Contents>"
                 "<Key>" + entry.path().filename().string() + "</Key>"
-                "<LastModified>" + std::to_string(fs::last_write_time(entry)) + "</LastModified>"
+                "<LastModified>" + to_iso8601(fs::last_write_time(entry)) + "</LastModified>"
                 "<Size>" + std::to_string(fs::file_size(entry.path())) + "</Size>"
                 "</Contents>";
         }

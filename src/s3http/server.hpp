@@ -17,7 +17,7 @@
 #include <thread>
 #include <unordered_set>
 
-#include "types.hpp" 
+#include "../common/common.hpp" 
 #include "../index/index.hpp"
 #include "../store/store.hpp"
 #include "../store/buffer.hpp"
@@ -26,6 +26,10 @@
 namespace beast = boost::beast;
 namespace http  = beast::http;
 namespace asio   = boost::asio;
+
+namespace lobos::http {
+    constexpr beast::string_view server_name = "lobos";
+}
 
 struct httpConfig {
     std::string address;
@@ -37,6 +41,7 @@ struct httpConfig {
 };
 
 class S3HttpServer {
+    friend class S3OpHandler;
 public:
     explicit S3HttpServer(
         std::string dir,
@@ -85,36 +90,39 @@ private:
         std::shared_ptr<session_buffer> session_buffer);
 
     void sanitize_target_path(std::string& target);
-    bool parse_aws_params(std::string_view t, std::unordered_map<std::string, std::string>& aws_params);
-    static std::string to_rfc1123(time_t t);
-    static beast::string_view mime_type(beast::string_view path);
-    std::string create_dest_dirs_if_not_exist(std::string object);
+    bool parse_query_params(std::string_view t, std::unordered_map<std::string, std::string>& query_params);
 
     asio::awaitable<bool> auth_request(const http::request<http::buffer_body>& req);
 
     std::unordered_map<std::string, Multipart> active_mpus_;
 
-    asio::awaitable<http::message_generator> handle_get_object(beast::string_view object, 
-        http::request<http::buffer_body>&& req,
-        std::shared_ptr<session_buffer> session_buffer);
-    asio::awaitable<http::message_generator> handle_head_object(beast::string_view object,
-        http::request<http::buffer_body>&& req);
-    asio::awaitable<http::message_generator> handle_list_objects(beast::string_view prefix,
-        http::request<http::buffer_body>&& req,
-        std::shared_ptr<session_buffer> session_buffer);
-    asio::awaitable<http::message_generator> handle_put_object(beast::string_view object,
-        http::request<http::buffer_body>&& req);
-    asio::awaitable<http::message_generator> handle_create_mpu(beast::string_view object,
-        http::request<http::buffer_body>&& req);
-    asio::awaitable<http::message_generator> handle_complete_mpu(std::string upload_id, 
-        http::request<http::buffer_body>&& req,
-        std::shared_ptr<session_buffer> session_buffer);
-
-    http::message_generator not_found_bucket_res(beast::string_view bucket, http::request<http::buffer_body>&& req);
-    http::message_generator not_found_key_res(beast::string_view object, http::request<http::buffer_body>&& req);
-    http::message_generator forbidden_res(http::request<http::buffer_body>&& req);
-    http::message_generator bad_request_res(std::string code, std::string msg, http::request<http::buffer_body>&& req);
-    http::message_generator internal_err_res(http::request<http::buffer_body>&& req);
+    http::message_generator forbidden_res(http::request<http::buffer_body>&& req) {
+        http::response<http::string_body> res{http::status::forbidden, req.version()};
+        res.set(http::field::server, lobos::http::server_name);
+        res.set(http::field::content_type, "application/xml");
+        res.keep_alive(false);
+        res.body() = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<Error><Code>InvalidAccessKeyId</Code>"
+            "<Message></Message>"
+            "</Error>";
+        res.prepare_payload();
+        return res;
+    }
+    http::message_generator bad_request_res(std::string code, std::string msg, http::request<http::buffer_body>&& req) {
+        http::response<http::string_body> res{http::status::bad_request, req.version()};
+        res.set(http::field::server, lobos::http::server_name);
+        res.set(http::field::content_type, "application/xml");
+        res.keep_alive(false);
+        res.body() =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<Error>"
+            "<Code>"+ code +"</Code>"
+            "<Message>"+ msg + "</Message>"
+            "<RequestId>...</RequestId>"
+            "</Error>";
+        res.prepare_payload();
+        return res;
+    }
 
     std::shared_ptr<session_buffer> make_buffer(size_t size) {
         if (conf_.use_spdk)

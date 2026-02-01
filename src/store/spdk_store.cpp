@@ -173,7 +173,7 @@ asio::awaitable<void> SpdkStore::do_list(std::string_view prefix, session_buffer
         } else {
             s ="<Contents>"
                 "<Key>" + it->first + "</Key>"
-                "<LastModified>" + std::to_string(it->second.last_modified) + "</LastModified>"
+                "<LastModified>" + to_iso8601(it->second.last_modified) + "</LastModified>"
                 "<Size>" + std::to_string(it->second.size) + "</Size>"
                 "</Contents>";
         }
