@@ -51,12 +51,12 @@ extern AuthParamsDefaultTypeInternal _AuthParams_default_instance_;
 class Filters;
 struct FiltersDefaultTypeInternal;
 extern FiltersDefaultTypeInternal _Filters_default_instance_;
-class Key;
-struct KeyDefaultTypeInternal;
-extern KeyDefaultTypeInternal _Key_default_instance_;
 class ListAllUsersReply;
 struct ListAllUsersReplyDefaultTypeInternal;
 extern ListAllUsersReplyDefaultTypeInternal _ListAllUsersReply_default_instance_;
+class Name;
+struct NameDefaultTypeInternal;
+extern NameDefaultTypeInternal _Name_default_instance_;
 class UserReply;
 struct UserReplyDefaultTypeInternal;
 extern UserReplyDefaultTypeInternal _UserReply_default_instance_;
@@ -64,8 +64,8 @@ extern UserReplyDefaultTypeInternal _UserReply_default_instance_;
 PROTOBUF_NAMESPACE_OPEN
 template<> ::loboscontrol::AuthParams* Arena::CreateMaybeMessage<::loboscontrol::AuthParams>(Arena*);
 template<> ::loboscontrol::Filters* Arena::CreateMaybeMessage<::loboscontrol::Filters>(Arena*);
-template<> ::loboscontrol::Key* Arena::CreateMaybeMessage<::loboscontrol::Key>(Arena*);
 template<> ::loboscontrol::ListAllUsersReply* Arena::CreateMaybeMessage<::loboscontrol::ListAllUsersReply>(Arena*);
+template<> ::loboscontrol::Name* Arena::CreateMaybeMessage<::loboscontrol::Name>(Arena*);
 template<> ::loboscontrol::UserReply* Arena::CreateMaybeMessage<::loboscontrol::UserReply>(Arena*);
 PROTOBUF_NAMESPACE_CLOSE
 namespace loboscontrol {
@@ -193,10 +193,26 @@ class AuthParams final :
   // accessors -------------------------------------------------------
 
   enum : int {
-    kKeyFieldNumber = 1,
-    kSecretFieldNumber = 2,
+    kNameFieldNumber = 1,
+    kKeyFieldNumber = 2,
+    kSecretFieldNumber = 3,
+    kBackendFieldNumber = 4,
   };
-  // string key = 1;
+  // string name = 1;
+  void clear_name();
+  const std::string& name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_name();
+  PROTOBUF_NODISCARD std::string* release_name();
+  void set_allocated_name(std::string* name);
+  private:
+  const std::string& _internal_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(const std::string& value);
+  std::string* _internal_mutable_name();
+  public:
+
+  // string key = 2;
   void clear_key();
   const std::string& key() const;
   template <typename ArgT0 = const std::string&, typename... ArgT>
@@ -210,7 +226,7 @@ class AuthParams final :
   std::string* _internal_mutable_key();
   public:
 
-  // string secret = 2;
+  // string secret = 3;
   void clear_secret();
   const std::string& secret() const;
   template <typename ArgT0 = const std::string&, typename... ArgT>
@@ -224,6 +240,20 @@ class AuthParams final :
   std::string* _internal_mutable_secret();
   public:
 
+  // string backend = 4;
+  void clear_backend();
+  const std::string& backend() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_backend(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_backend();
+  PROTOBUF_NODISCARD std::string* release_backend();
+  void set_allocated_backend(std::string* backend);
+  private:
+  const std::string& _internal_backend() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_backend(const std::string& value);
+  std::string* _internal_mutable_backend();
+  public:
+
   // @@protoc_insertion_point(class_scope:loboscontrol.AuthParams)
  private:
   class _Internal;
@@ -232,8 +262,10 @@ class AuthParams final :
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
   struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr key_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr secret_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr backend_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -394,24 +426,24 @@ class Filters final :
 };
 // -------------------------------------------------------------------
 
-class Key final :
-    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:loboscontrol.Key) */ {
+class Name final :
+    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:loboscontrol.Name) */ {
  public:
-  inline Key() : Key(nullptr) {}
-  ~Key() override;
-  explicit PROTOBUF_CONSTEXPR Key(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+  inline Name() : Name(nullptr) {}
+  ~Name() override;
+  explicit PROTOBUF_CONSTEXPR Name(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
 
-  Key(const Key& from);
-  Key(Key&& from) noexcept
-    : Key() {
+  Name(const Name& from);
+  Name(Name&& from) noexcept
+    : Name() {
     *this = ::std::move(from);
   }
 
-  inline Key& operator=(const Key& from) {
+  inline Name& operator=(const Name& from) {
     CopyFrom(from);
     return *this;
   }
-  inline Key& operator=(Key&& from) noexcept {
+  inline Name& operator=(Name&& from) noexcept {
     if (this == &from) return *this;
     if (GetOwningArena() == from.GetOwningArena()
   #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
@@ -434,20 +466,20 @@ class Key final :
   static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  static const Key& default_instance() {
+  static const Name& default_instance() {
     return *internal_default_instance();
   }
-  static inline const Key* internal_default_instance() {
-    return reinterpret_cast<const Key*>(
-               &_Key_default_instance_);
+  static inline const Name* internal_default_instance() {
+    return reinterpret_cast<const Name*>(
+               &_Name_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
     2;
 
-  friend void swap(Key& a, Key& b) {
+  friend void swap(Name& a, Name& b) {
     a.Swap(&b);
   }
-  inline void Swap(Key* other) {
+  inline void Swap(Name* other) {
     if (other == this) return;
   #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
     if (GetOwningArena() != nullptr &&
@@ -460,7 +492,7 @@ class Key final :
       ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(Key* other) {
+  void UnsafeArenaSwap(Name* other) {
     if (other == this) return;
     GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
     InternalSwap(other);
@@ -468,14 +500,14 @@ class Key final :
 
   // implements Message ----------------------------------------------
 
-  Key* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<Key>(arena);
+  Name* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<Name>(arena);
   }
   using ::PROTOBUF_NAMESPACE_ID::Message::CopyFrom;
-  void CopyFrom(const Key& from);
+  void CopyFrom(const Name& from);
   using ::PROTOBUF_NAMESPACE_ID::Message::MergeFrom;
-  void MergeFrom( const Key& from) {
-    Key::MergeImpl(*this, from);
+  void MergeFrom( const Name& from) {
+    Name::MergeImpl(*this, from);
   }
   private:
   static void MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg);
@@ -493,15 +525,15 @@ class Key final :
   void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
   void SharedDtor();
   void SetCachedSize(int size) const final;
-  void InternalSwap(Key* other);
+  void InternalSwap(Name* other);
 
   private:
   friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
   static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "loboscontrol.Key";
+    return "loboscontrol.Name";
   }
   protected:
-  explicit Key(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+  explicit Name(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                        bool is_message_owned = false);
   public:
 
@@ -515,23 +547,23 @@ class Key final :
   // accessors -------------------------------------------------------
 
   enum : int {
-    kKeyFieldNumber = 1,
+    kNameFieldNumber = 1,
   };
-  // string key = 1;
-  void clear_key();
-  const std::string& key() const;
+  // string name = 1;
+  void clear_name();
+  const std::string& name() const;
   template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_key(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_key();
-  PROTOBUF_NODISCARD std::string* release_key();
-  void set_allocated_key(std::string* key);
+  void set_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_name();
+  PROTOBUF_NODISCARD std::string* release_name();
+  void set_allocated_name(std::string* name);
   private:
-  const std::string& _internal_key() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_key(const std::string& value);
-  std::string* _internal_mutable_key();
+  const std::string& _internal_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(const std::string& value);
+  std::string* _internal_mutable_name();
   public:
 
-  // @@protoc_insertion_point(class_scope:loboscontrol.Key)
+  // @@protoc_insertion_point(class_scope:loboscontrol.Name)
  private:
   class _Internal;
 
@@ -539,7 +571,7 @@ class Key final :
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
   struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr key_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -668,25 +700,25 @@ class ListAllUsersReply final :
   // accessors -------------------------------------------------------
 
   enum : int {
-    kMessageFieldNumber = 1,
+    kUsersFieldNumber = 1,
   };
-  // repeated .loboscontrol.UserReply message = 1;
-  int message_size() const;
+  // repeated .loboscontrol.UserReply users = 1;
+  int users_size() const;
   private:
-  int _internal_message_size() const;
+  int _internal_users_size() const;
   public:
-  void clear_message();
-  ::loboscontrol::UserReply* mutable_message(int index);
+  void clear_users();
+  ::loboscontrol::UserReply* mutable_users(int index);
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::loboscontrol::UserReply >*
-      mutable_message();
+      mutable_users();
   private:
-  const ::loboscontrol::UserReply& _internal_message(int index) const;
-  ::loboscontrol::UserReply* _internal_add_message();
+  const ::loboscontrol::UserReply& _internal_users(int index) const;
+  ::loboscontrol::UserReply* _internal_add_users();
   public:
-  const ::loboscontrol::UserReply& message(int index) const;
-  ::loboscontrol::UserReply* add_message();
+  const ::loboscontrol::UserReply& users(int index) const;
+  ::loboscontrol::UserReply* add_users();
   const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::loboscontrol::UserReply >&
-      message() const;
+      users() const;
 
   // @@protoc_insertion_point(class_scope:loboscontrol.ListAllUsersReply)
  private:
@@ -696,7 +728,7 @@ class ListAllUsersReply final :
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
   struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::loboscontrol::UserReply > message_;
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::loboscontrol::UserReply > users_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -825,21 +857,25 @@ class UserReply final :
   // accessors -------------------------------------------------------
 
   enum : int {
-    kMessageFieldNumber = 1,
+    kParamsFieldNumber = 1,
   };
-  // string message = 1;
-  void clear_message();
-  const std::string& message() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_message(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_message();
-  PROTOBUF_NODISCARD std::string* release_message();
-  void set_allocated_message(std::string* message);
+  // .loboscontrol.AuthParams params = 1;
+  bool has_params() const;
   private:
-  const std::string& _internal_message() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_message(const std::string& value);
-  std::string* _internal_mutable_message();
+  bool _internal_has_params() const;
   public:
+  void clear_params();
+  const ::loboscontrol::AuthParams& params() const;
+  PROTOBUF_NODISCARD ::loboscontrol::AuthParams* release_params();
+  ::loboscontrol::AuthParams* mutable_params();
+  void set_allocated_params(::loboscontrol::AuthParams* params);
+  private:
+  const ::loboscontrol::AuthParams& _internal_params() const;
+  ::loboscontrol::AuthParams* _internal_mutable_params();
+  public:
+  void unsafe_arena_set_allocated_params(
+      ::loboscontrol::AuthParams* params);
+  ::loboscontrol::AuthParams* unsafe_arena_release_params();
 
   // @@protoc_insertion_point(class_scope:loboscontrol.UserReply)
  private:
@@ -849,7 +885,7 @@ class UserReply final :
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
   struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr message_;
+    ::loboscontrol::AuthParams* params_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -866,7 +902,57 @@ class UserReply final :
 #endif  // __GNUC__
 // AuthParams
 
-// string key = 1;
+// string name = 1;
+inline void AuthParams::clear_name() {
+  _impl_.name_.ClearToEmpty();
+}
+inline const std::string& AuthParams::name() const {
+  // @@protoc_insertion_point(field_get:loboscontrol.AuthParams.name)
+  return _internal_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void AuthParams::set_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:loboscontrol.AuthParams.name)
+}
+inline std::string* AuthParams::mutable_name() {
+  std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:loboscontrol.AuthParams.name)
+  return _s;
+}
+inline const std::string& AuthParams::_internal_name() const {
+  return _impl_.name_.Get();
+}
+inline void AuthParams::_internal_set_name(const std::string& value) {
+  
+  _impl_.name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* AuthParams::_internal_mutable_name() {
+  
+  return _impl_.name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* AuthParams::release_name() {
+  // @@protoc_insertion_point(field_release:loboscontrol.AuthParams.name)
+  return _impl_.name_.Release();
+}
+inline void AuthParams::set_allocated_name(std::string* name) {
+  if (name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.name_.SetAllocated(name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:loboscontrol.AuthParams.name)
+}
+
+// string key = 2;
 inline void AuthParams::clear_key() {
   _impl_.key_.ClearToEmpty();
 }
@@ -916,7 +1002,7 @@ inline void AuthParams::set_allocated_key(std::string* key) {
   // @@protoc_insertion_point(field_set_allocated:loboscontrol.AuthParams.key)
 }
 
-// string secret = 2;
+// string secret = 3;
 inline void AuthParams::clear_secret() {
   _impl_.secret_.ClearToEmpty();
 }
@@ -964,6 +1050,56 @@ inline void AuthParams::set_allocated_secret(std::string* secret) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:loboscontrol.AuthParams.secret)
+}
+
+// string backend = 4;
+inline void AuthParams::clear_backend() {
+  _impl_.backend_.ClearToEmpty();
+}
+inline const std::string& AuthParams::backend() const {
+  // @@protoc_insertion_point(field_get:loboscontrol.AuthParams.backend)
+  return _internal_backend();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void AuthParams::set_backend(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.backend_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:loboscontrol.AuthParams.backend)
+}
+inline std::string* AuthParams::mutable_backend() {
+  std::string* _s = _internal_mutable_backend();
+  // @@protoc_insertion_point(field_mutable:loboscontrol.AuthParams.backend)
+  return _s;
+}
+inline const std::string& AuthParams::_internal_backend() const {
+  return _impl_.backend_.Get();
+}
+inline void AuthParams::_internal_set_backend(const std::string& value) {
+  
+  _impl_.backend_.Set(value, GetArenaForAllocation());
+}
+inline std::string* AuthParams::_internal_mutable_backend() {
+  
+  return _impl_.backend_.Mutable(GetArenaForAllocation());
+}
+inline std::string* AuthParams::release_backend() {
+  // @@protoc_insertion_point(field_release:loboscontrol.AuthParams.backend)
+  return _impl_.backend_.Release();
+}
+inline void AuthParams::set_allocated_backend(std::string* backend) {
+  if (backend != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.backend_.SetAllocated(backend, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.backend_.IsDefault()) {
+    _impl_.backend_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:loboscontrol.AuthParams.backend)
 }
 
 // -------------------------------------------------------------------
@@ -1022,154 +1158,194 @@ inline void Filters::set_allocated_message(std::string* message) {
 
 // -------------------------------------------------------------------
 
-// Key
+// Name
 
-// string key = 1;
-inline void Key::clear_key() {
-  _impl_.key_.ClearToEmpty();
+// string name = 1;
+inline void Name::clear_name() {
+  _impl_.name_.ClearToEmpty();
 }
-inline const std::string& Key::key() const {
-  // @@protoc_insertion_point(field_get:loboscontrol.Key.key)
-  return _internal_key();
+inline const std::string& Name::name() const {
+  // @@protoc_insertion_point(field_get:loboscontrol.Name.name)
+  return _internal_name();
 }
 template <typename ArgT0, typename... ArgT>
 inline PROTOBUF_ALWAYS_INLINE
-void Key::set_key(ArgT0&& arg0, ArgT... args) {
+void Name::set_name(ArgT0&& arg0, ArgT... args) {
  
- _impl_.key_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:loboscontrol.Key.key)
+ _impl_.name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:loboscontrol.Name.name)
 }
-inline std::string* Key::mutable_key() {
-  std::string* _s = _internal_mutable_key();
-  // @@protoc_insertion_point(field_mutable:loboscontrol.Key.key)
+inline std::string* Name::mutable_name() {
+  std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:loboscontrol.Name.name)
   return _s;
 }
-inline const std::string& Key::_internal_key() const {
-  return _impl_.key_.Get();
+inline const std::string& Name::_internal_name() const {
+  return _impl_.name_.Get();
 }
-inline void Key::_internal_set_key(const std::string& value) {
+inline void Name::_internal_set_name(const std::string& value) {
   
-  _impl_.key_.Set(value, GetArenaForAllocation());
+  _impl_.name_.Set(value, GetArenaForAllocation());
 }
-inline std::string* Key::_internal_mutable_key() {
+inline std::string* Name::_internal_mutable_name() {
   
-  return _impl_.key_.Mutable(GetArenaForAllocation());
+  return _impl_.name_.Mutable(GetArenaForAllocation());
 }
-inline std::string* Key::release_key() {
-  // @@protoc_insertion_point(field_release:loboscontrol.Key.key)
-  return _impl_.key_.Release();
+inline std::string* Name::release_name() {
+  // @@protoc_insertion_point(field_release:loboscontrol.Name.name)
+  return _impl_.name_.Release();
 }
-inline void Key::set_allocated_key(std::string* key) {
-  if (key != nullptr) {
+inline void Name::set_allocated_name(std::string* name) {
+  if (name != nullptr) {
     
   } else {
     
   }
-  _impl_.key_.SetAllocated(key, GetArenaForAllocation());
+  _impl_.name_.SetAllocated(name, GetArenaForAllocation());
 #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.key_.IsDefault()) {
-    _impl_.key_.Set("", GetArenaForAllocation());
+  if (_impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArenaForAllocation());
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:loboscontrol.Key.key)
+  // @@protoc_insertion_point(field_set_allocated:loboscontrol.Name.name)
 }
 
 // -------------------------------------------------------------------
 
 // ListAllUsersReply
 
-// repeated .loboscontrol.UserReply message = 1;
-inline int ListAllUsersReply::_internal_message_size() const {
-  return _impl_.message_.size();
+// repeated .loboscontrol.UserReply users = 1;
+inline int ListAllUsersReply::_internal_users_size() const {
+  return _impl_.users_.size();
 }
-inline int ListAllUsersReply::message_size() const {
-  return _internal_message_size();
+inline int ListAllUsersReply::users_size() const {
+  return _internal_users_size();
 }
-inline void ListAllUsersReply::clear_message() {
-  _impl_.message_.Clear();
+inline void ListAllUsersReply::clear_users() {
+  _impl_.users_.Clear();
 }
-inline ::loboscontrol::UserReply* ListAllUsersReply::mutable_message(int index) {
-  // @@protoc_insertion_point(field_mutable:loboscontrol.ListAllUsersReply.message)
-  return _impl_.message_.Mutable(index);
+inline ::loboscontrol::UserReply* ListAllUsersReply::mutable_users(int index) {
+  // @@protoc_insertion_point(field_mutable:loboscontrol.ListAllUsersReply.users)
+  return _impl_.users_.Mutable(index);
 }
 inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::loboscontrol::UserReply >*
-ListAllUsersReply::mutable_message() {
-  // @@protoc_insertion_point(field_mutable_list:loboscontrol.ListAllUsersReply.message)
-  return &_impl_.message_;
+ListAllUsersReply::mutable_users() {
+  // @@protoc_insertion_point(field_mutable_list:loboscontrol.ListAllUsersReply.users)
+  return &_impl_.users_;
 }
-inline const ::loboscontrol::UserReply& ListAllUsersReply::_internal_message(int index) const {
-  return _impl_.message_.Get(index);
+inline const ::loboscontrol::UserReply& ListAllUsersReply::_internal_users(int index) const {
+  return _impl_.users_.Get(index);
 }
-inline const ::loboscontrol::UserReply& ListAllUsersReply::message(int index) const {
-  // @@protoc_insertion_point(field_get:loboscontrol.ListAllUsersReply.message)
-  return _internal_message(index);
+inline const ::loboscontrol::UserReply& ListAllUsersReply::users(int index) const {
+  // @@protoc_insertion_point(field_get:loboscontrol.ListAllUsersReply.users)
+  return _internal_users(index);
 }
-inline ::loboscontrol::UserReply* ListAllUsersReply::_internal_add_message() {
-  return _impl_.message_.Add();
+inline ::loboscontrol::UserReply* ListAllUsersReply::_internal_add_users() {
+  return _impl_.users_.Add();
 }
-inline ::loboscontrol::UserReply* ListAllUsersReply::add_message() {
-  ::loboscontrol::UserReply* _add = _internal_add_message();
-  // @@protoc_insertion_point(field_add:loboscontrol.ListAllUsersReply.message)
+inline ::loboscontrol::UserReply* ListAllUsersReply::add_users() {
+  ::loboscontrol::UserReply* _add = _internal_add_users();
+  // @@protoc_insertion_point(field_add:loboscontrol.ListAllUsersReply.users)
   return _add;
 }
 inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::loboscontrol::UserReply >&
-ListAllUsersReply::message() const {
-  // @@protoc_insertion_point(field_list:loboscontrol.ListAllUsersReply.message)
-  return _impl_.message_;
+ListAllUsersReply::users() const {
+  // @@protoc_insertion_point(field_list:loboscontrol.ListAllUsersReply.users)
+  return _impl_.users_;
 }
 
 // -------------------------------------------------------------------
 
 // UserReply
 
-// string message = 1;
-inline void UserReply::clear_message() {
-  _impl_.message_.ClearToEmpty();
+// .loboscontrol.AuthParams params = 1;
+inline bool UserReply::_internal_has_params() const {
+  return this != internal_default_instance() && _impl_.params_ != nullptr;
 }
-inline const std::string& UserReply::message() const {
-  // @@protoc_insertion_point(field_get:loboscontrol.UserReply.message)
-  return _internal_message();
+inline bool UserReply::has_params() const {
+  return _internal_has_params();
 }
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void UserReply::set_message(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.message_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:loboscontrol.UserReply.message)
+inline void UserReply::clear_params() {
+  if (GetArenaForAllocation() == nullptr && _impl_.params_ != nullptr) {
+    delete _impl_.params_;
+  }
+  _impl_.params_ = nullptr;
 }
-inline std::string* UserReply::mutable_message() {
-  std::string* _s = _internal_mutable_message();
-  // @@protoc_insertion_point(field_mutable:loboscontrol.UserReply.message)
-  return _s;
+inline const ::loboscontrol::AuthParams& UserReply::_internal_params() const {
+  const ::loboscontrol::AuthParams* p = _impl_.params_;
+  return p != nullptr ? *p : reinterpret_cast<const ::loboscontrol::AuthParams&>(
+      ::loboscontrol::_AuthParams_default_instance_);
 }
-inline const std::string& UserReply::_internal_message() const {
-  return _impl_.message_.Get();
+inline const ::loboscontrol::AuthParams& UserReply::params() const {
+  // @@protoc_insertion_point(field_get:loboscontrol.UserReply.params)
+  return _internal_params();
 }
-inline void UserReply::_internal_set_message(const std::string& value) {
-  
-  _impl_.message_.Set(value, GetArenaForAllocation());
-}
-inline std::string* UserReply::_internal_mutable_message() {
-  
-  return _impl_.message_.Mutable(GetArenaForAllocation());
-}
-inline std::string* UserReply::release_message() {
-  // @@protoc_insertion_point(field_release:loboscontrol.UserReply.message)
-  return _impl_.message_.Release();
-}
-inline void UserReply::set_allocated_message(std::string* message) {
-  if (message != nullptr) {
+inline void UserReply::unsafe_arena_set_allocated_params(
+    ::loboscontrol::AuthParams* params) {
+  if (GetArenaForAllocation() == nullptr) {
+    delete reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(_impl_.params_);
+  }
+  _impl_.params_ = params;
+  if (params) {
     
   } else {
     
   }
-  _impl_.message_.SetAllocated(message, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.message_.IsDefault()) {
-    _impl_.message_.Set("", GetArenaForAllocation());
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loboscontrol.UserReply.params)
+}
+inline ::loboscontrol::AuthParams* UserReply::release_params() {
+  
+  ::loboscontrol::AuthParams* temp = _impl_.params_;
+  _impl_.params_ = nullptr;
+#ifdef PROTOBUF_FORCE_COPY_IN_RELEASE
+  auto* old =  reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(temp);
+  temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+  if (GetArenaForAllocation() == nullptr) { delete old; }
+#else  // PROTOBUF_FORCE_COPY_IN_RELEASE
+  if (GetArenaForAllocation() != nullptr) {
+    temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
   }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:loboscontrol.UserReply.message)
+#endif  // !PROTOBUF_FORCE_COPY_IN_RELEASE
+  return temp;
+}
+inline ::loboscontrol::AuthParams* UserReply::unsafe_arena_release_params() {
+  // @@protoc_insertion_point(field_release:loboscontrol.UserReply.params)
+  
+  ::loboscontrol::AuthParams* temp = _impl_.params_;
+  _impl_.params_ = nullptr;
+  return temp;
+}
+inline ::loboscontrol::AuthParams* UserReply::_internal_mutable_params() {
+  
+  if (_impl_.params_ == nullptr) {
+    auto* p = CreateMaybeMessage<::loboscontrol::AuthParams>(GetArenaForAllocation());
+    _impl_.params_ = p;
+  }
+  return _impl_.params_;
+}
+inline ::loboscontrol::AuthParams* UserReply::mutable_params() {
+  ::loboscontrol::AuthParams* _msg = _internal_mutable_params();
+  // @@protoc_insertion_point(field_mutable:loboscontrol.UserReply.params)
+  return _msg;
+}
+inline void UserReply::set_allocated_params(::loboscontrol::AuthParams* params) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  if (message_arena == nullptr) {
+    delete _impl_.params_;
+  }
+  if (params) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+        ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(params);
+    if (message_arena != submessage_arena) {
+      params = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, params, submessage_arena);
+    }
+    
+  } else {
+    
+  }
+  _impl_.params_ = params;
+  // @@protoc_insertion_point(field_set_allocated:loboscontrol.UserReply.params)
 }
 
 #ifdef __GNUC__

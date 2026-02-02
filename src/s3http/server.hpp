@@ -35,11 +35,9 @@ namespace lobos::http {
 struct serverConfig {
     std::string address;
     short unsigned int port;
-    std::string access_key;
-    std::string secret_key;
+    bool auth_enabled;
     std::string grpc_server;
     bool use_spdk = false;
-    bool auth_enabled = true;
 };
 
 class S3HttpServer {
@@ -52,9 +50,6 @@ public:
         : store_(store)
         , conf_(c)
     {
-        if (conf_.access_key.empty() || conf_.secret_key.empty())
-            conf_.auth_enabled = false;
-
         auto const addr = asio::ip::make_address(conf_.address);
         endpoint = {addr, conf_.port};
 
@@ -68,10 +63,16 @@ public:
         active_mpus_ = store_->get_active_mpus();
 
         // Start the control plane
-        control_plane_.start(conf_.grpc_server);
+        cp_ = std::make_unique<ControlPlane>(*store_, s3_users_);
+        cp_server_.start(conf_.grpc_server, cp_.get());
+
+        auto users = cp_->list_all_users("");
+        for (const User& u : users) {
+            s3_users_.insert(std::pair<std::string, std::string>(u.key, u.secret));
+        }
     }
     ~S3HttpServer() {
-        control_plane_.stop();
+        cp_server_.stop();
     };
 
     void start(int threads, std::vector<int> pins);
@@ -83,7 +84,9 @@ public:
 private:
     Store* store_;
     serverConfig conf_;
-    ControlPlaneServer control_plane_;
+    ControlPlaneServer cp_server_;
+    std::unique_ptr<ControlPlane> cp_;
+
     std::vector<std::unique_ptr<asio::io_context>> ioctxs_;
     std::vector<std::thread> thread_pool_;
     std::unique_ptr<asio::signal_set> signals_;
@@ -101,6 +104,7 @@ private:
 
     asio::awaitable<bool> auth_request(const http::request<http::buffer_body>& req);
 
+    std::unordered_map<std::string, std::string> s3_users_;
     std::unordered_map<std::string, Multipart> active_mpus_;
 
     http::message_generator forbidden_res(http::request<http::buffer_body>&& req) {

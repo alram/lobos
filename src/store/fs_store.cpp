@@ -121,8 +121,6 @@ asio::awaitable<int> FsStore::do_create_mpu(std::string_view o, std::string uplo
 }
 
 std::unordered_map<std::string, Multipart> FsStore::get_active_mpus() {
-    // load up the xattr that contain MPU information
-    create_dest_dirs_if_not_exist(lobos_mpu_prefix + "/dummy");
     fs::path p = lobos_mpu_prefix + "/";
     std::unordered_map<std::string, Multipart> active_mpus = {};
 
@@ -238,4 +236,46 @@ std::string FsStore::create_dest_dirs_if_not_exist(std::string object) {
         }
     }
     return object;
+}
+
+int FsStore::metadata_add_user(User u) {
+    std::string key = lobos_user_prefix + "/" + u.name + "_" + u.key + "_" + u.secret + "_" + u.backend;
+    int fd = open(key.c_str(), O_CREAT | O_RDONLY, 0600);
+    if (fd < 0)
+        return fd;
+    close(fd);
+
+    return 0;
+}
+
+std::vector<User> FsStore::metadata_list_users(std::string filter) {
+    fs::path p = lobos_user_prefix + "/";
+    std::vector<User> users = {};
+
+    for (auto& entry : boost::make_iterator_range(fs::directory_iterator(p))) {
+        std::string e = entry.path().string().substr(p.string().length());
+        auto pos = e.find('_');
+        if (pos == beast::string_view::npos)
+            break;
+        std::string name = e.substr(0, pos);
+        e.erase(0, pos+1);
+        pos = e.find('_');
+        if (pos == beast::string_view::npos)
+            break;
+        std::string key = e.substr(0, pos);
+        e.erase(0, pos+1);
+        pos = e.find('_');
+        if (pos == beast::string_view::npos)
+            break;
+        std::string secret = e.substr(0, pos);
+        e.erase(0, pos+1);
+        User u {
+            name,
+            key,
+            secret,
+            e
+        };
+        users.emplace_back(u);
+    }
+    return users;
 }

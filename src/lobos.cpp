@@ -74,7 +74,7 @@ std::vector<int> parse_threads_input(std::string i) {
 }
 
 bool validate_server_can_run(serverConfig conf) {
-    if (conf.access_key.empty() || conf.secret_key.empty()) {
+    if (!conf.auth_enabled) {
         // we don't allow no-auth and bind to something else
         if (conf.address != "127.0.0.1")
             return false;
@@ -97,8 +97,7 @@ int main(int argc, char **argv) {
             ("lobos.http_threads", po::value<int>()->default_value(8))
             ("lobos.http_threads_cores", po::value<std::string>()->default_value(""))
             ("lobos.grpc_server", po::value<std::string>()->default_value("127.0.0.1:50051"))
-            ("lobos.access_key", po::value<std::string>()->default_value(""))
-            ("lobos.secret_key", po::value<std::string>()->default_value(""))
+            ("lobos.s3_auth_enabled", po::value<bool>()->default_value(true))
             ("filesystem.directory", po::value<std::string>()->default_value(""))
             ("spdk_blobstore.device", po::value<std::string>()->default_value(""))
             ("spdk_blobstore.cluster_sz", po::value<uint32_t>()->default_value(131072))
@@ -141,8 +140,7 @@ int main(int argc, char **argv) {
     serverConfig conf = {
         vm["lobos.listen_ip"].as<std::string>(),
         vm["lobos.port"].as<short unsigned int>(),
-        vm["lobos.access_key"].as<std::string>(),
-        vm["lobos.secret_key"].as<std::string>(),
+        vm["lobos.s3_auth_enabled"].as<bool>(),
         vm["lobos.grpc_server"].as<std::string>(),
     };
 
@@ -182,6 +180,7 @@ int main(int argc, char **argv) {
         std::filesystem::current_path(bucket);
         // We're in FS mode
         store = std::make_unique<FsStore>();
+        store->init_store("");
     } else {
         std::cerr << "Error unsupported backend " << backend << std::endl;
         return 1;

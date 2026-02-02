@@ -37,3 +37,10 @@ boost::beast::string_view mime_type(boost::beast::string_view key);
 
 std::string to_rfc1123(time_t t);
 std::string to_iso8601(time_t t);
+
+struct User {
+    std::string name;
+    std::string key;
+    std::string secret;
+    std::string backend;
+};
