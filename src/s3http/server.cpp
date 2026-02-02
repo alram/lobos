@@ -49,9 +49,12 @@ asio::awaitable<bool> S3HttpServer::auth_request(const http::request<http::buffe
             co_return false;
         auto pos_e = auth.find(",");
         beast::string_view auth_creds = auth.substr(pos_s, pos_e-pos_s);
-        // we only support one key/secret for now so we don't store it but
-        // in the future if we want ot support multiple we'll change that
+
         auto in_pos = auth_creds.find("/");
+        auto access_key = auth_creds.substr(0, in_pos);
+        if (!s3_users_.contains(access_key))
+            co_return false;
+
         auth_creds.remove_prefix(in_pos+1);
         in_pos = auth_creds.find('/');
         auto scope_date = auth_creds.substr(0, in_pos);
@@ -133,7 +136,7 @@ asio::awaitable<bool> S3HttpServer::auth_request(const http::request<http::buffe
             "\n" + std::string(auth_creds) + "\n"
             + shaCannonReq;
 
-        auto date_key = hmac_sha256("AWS4"+ conf_.secret_key, std::string(scope_date));
+        auto date_key = hmac_sha256("AWS4"+ s3_users_[access_key], std::string(scope_date));
         auto region_key = hmac_sha256(date_key, std::string(scope_region));
         auto svc_key = hmac_sha256(region_key, "s3");
         auto signing_key = hmac_sha256(svc_key, "aws4_request");
@@ -198,7 +201,7 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
 
     req.insert(lobos::s3::bucket, bucket_name);
 
-    auto op = S3OpHandler(*this->store_, 
+    auto op = S3OpHandler(*store_, 
         std::move(req),
         std::move(session_buffer),
         std::move(target),
@@ -311,7 +314,6 @@ void S3HttpServer::start(int threads, std::vector<int> pins) {
 
     for (int i = 0; i < threads; i++) {
         thread_pool_.emplace_back([&, i]{
-
             if (pins.size() > 0)
                 pin_thread_to_core(pins[i]);
 

@@ -23,21 +23,21 @@ The parsing is pretty naive so things can get broken quick but the following see
 Next area of work in no particular order:
  - New index for SPDK
  - Blob pool/dynamic blob handle cache
- - SPDK buffe pool
+ - SPDK buffer pool
  - Extend S3 support
     - Checksums
     - Object versioning
     - Object tagging
     - Object Copy
     - ... probably more
- - Control plane
+ - Control plane (in progress)
 
 ## Building
 
 There's some work needed to make it easier to build... but for now:
 
 ```bash
-$ sudo apt install prometheus-cpp-dev
+$ sudo apt install prometheus-cpp-dev libgrpc-dev libgrpc++-dev protobuf-compiler-grpc libprotobuf-dev
 $ git clone https://github.com/alram/lobos.git
 $ cd lobos/src/
 # Build Boost
@@ -61,43 +61,20 @@ Command Line Options:
 
 ## Usage
 
-Lobos require a configuration file. That looks like:
-```ini
-[entry]
-# backend=spdk_blobstore          # other accepted: filesystem
-backend=filesystem
-listen_ip=0.0.0.0
-port=8080                       # port lobos listens on
-http_threads = 8                # numbers of beast threasd
-# Pin beast threads to CPU cores:
-# leave empty to disable
-# n-m for a range
-# n,m,o to specify cores
-http_threads_cores = 1-8
-# If either of those is empty, auth will be disabled
-# note that lobos will not allow to listen to anything
-# but 127.0.0.1 unless auth is enabled.
-access_key=lobos
-secret_key=lobos
-
-[filesystem]
-directory=/mnt/lobos                  # if in filesystem mode, this will use this option as CWD
-
-[spdk_blobstore]
-# As to be a pciaddr or "malloc" for testing
-# with malloc a 16MiB malloc bdev will be created
-device=0000:c1:00.0
-# device = malloc 
-cluster_sz = 32768             # see: https://spdk.io/doc/blob.html
-log_level = debug               # debug/none supported only currently
-reactor_core = 0                # SPDK pins its thread to a CPU core
-# SPDK polls by defaut, it can be switched to interrupt
-# mode, it's particularly to avoid spinning the CPU 
-# during dev/testing. For max performance do not set.
-# interrupt_mode=true
-max_use_pct=95
+Lobos require a configuration file. Check the commented `lobos.cfg` at the root of the repository for configuration options.
+Users management is imcomplete but if you enable authentication, you'll need to create S3 users. Lobos has a control plane using gRPC. A quick way to create a user is via the `grpcurl` command:
 ```
-Pinning and threads configuration is not required but recommended if you want the highest performance (and avoid SMT cores, if possible).
+$ grpcurl -plaintext -d '{"name": "alram"}' -proto src/controlplane/loboscontrol.proto localhost:50051 loboscontrol.ControlPlane/AddUser
+{
+  "params": {
+    "name": "test",
+    "key": "LB96D7QPTHK96NIM8UXU",
+    "secret": "fLxTLUF9b8Kcwp1lbBghuCQ1CcPCx+u5njBWqt1d",
+    "backend": "lobos"
+  }
+}
+```
+A Go CLI for lobos is also available at https://github.com/alram/lobos-cli
 
 ### Launching in filesystem:
 

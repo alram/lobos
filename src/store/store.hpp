@@ -2,6 +2,8 @@
 
 #include <span>
 
+#include <boost/asio/awaitable.hpp>
+
 #include "buffer.hpp"
 #include "../common/common.hpp" 
 
@@ -21,8 +23,12 @@ public:
     virtual asio::awaitable<int> do_create_mpu(std::string_view o, std::string upload_id) = 0;
     virtual std::unordered_map<std::string, Multipart> get_active_mpus() = 0;
     virtual asio::awaitable<int> do_assemble_mpu(std::string upload_id, Multipart mp, std::vector<int> parts) = 0;
-    virtual asio::awaitable<int> do_abort_mpu(std::string upload_id, Multipart mp) = 0;\
+    virtual asio::awaitable<int> do_abort_mpu(std::string upload_id, Multipart mp) = 0;
+    // Control plane stuff
+    virtual int metadata_add_user(User u) = 0;
+    virtual std::vector<User> metadata_list_users(std::string filter) = 0;
 protected:
     std::string lobos_state_prefix = ".__lobos__";
-    std::string lobos_mpu_prefix = lobos_state_prefix + "mpus__";
+    std::string lobos_mpu_prefix = lobos_state_prefix + "mpu__";
+    std::string lobos_user_prefix = lobos_state_prefix + "user__";
 };
