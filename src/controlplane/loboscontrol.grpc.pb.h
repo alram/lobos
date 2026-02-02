@@ -38,11 +38,11 @@ class ControlPlane final {
     virtual ~StubInterface() {}
     // S3 User management
     // Add user adds an S3 user
-    virtual ::grpc::Status AddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::loboscontrol::UserReply* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>> AsyncAddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::grpc::CompletionQueue* cq) {
+    virtual ::grpc::Status AddUser(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::loboscontrol::UserReply* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>> AsyncAddUser(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>>(AsyncAddUserRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>> PrepareAsyncAddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::grpc::CompletionQueue* cq) {
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>> PrepareAsyncAddUser(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>>(PrepareAsyncAddUserRaw(context, request, cq));
     }
     // ListAllUsers returns a list of all S3 users
@@ -66,8 +66,8 @@ class ControlPlane final {
       virtual ~async_interface() {}
       // S3 User management
       // Add user adds an S3 user
-      virtual void AddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void AddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void AddUser(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void AddUser(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       // ListAllUsers returns a list of all S3 users
       virtual void ListAllUsers(::grpc::ClientContext* context, const ::loboscontrol::Filters* request, ::loboscontrol::ListAllUsersReply* response, std::function<void(::grpc::Status)>) = 0;
       virtual void ListAllUsers(::grpc::ClientContext* context, const ::loboscontrol::Filters* request, ::loboscontrol::ListAllUsersReply* response, ::grpc::ClientUnaryReactor* reactor) = 0;
@@ -79,8 +79,8 @@ class ControlPlane final {
     virtual class async_interface* async() { return nullptr; }
     class async_interface* experimental_async() { return async(); }
    private:
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>* AsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>* PrepareAsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>* AsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>* PrepareAsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::ListAllUsersReply>* AsyncListAllUsersRaw(::grpc::ClientContext* context, const ::loboscontrol::Filters& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::ListAllUsersReply>* PrepareAsyncListAllUsersRaw(::grpc::ClientContext* context, const ::loboscontrol::Filters& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>* AsyncListUserRaw(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::grpc::CompletionQueue* cq) = 0;
@@ -89,11 +89,11 @@ class ControlPlane final {
   class Stub final : public StubInterface {
    public:
     Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
-    ::grpc::Status AddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::loboscontrol::UserReply* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>> AsyncAddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::grpc::CompletionQueue* cq) {
+    ::grpc::Status AddUser(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::loboscontrol::UserReply* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>> AsyncAddUser(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>>(AsyncAddUserRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>> PrepareAsyncAddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::grpc::CompletionQueue* cq) {
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>> PrepareAsyncAddUser(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>>(PrepareAsyncAddUserRaw(context, request, cq));
     }
     ::grpc::Status ListAllUsers(::grpc::ClientContext* context, const ::loboscontrol::Filters& request, ::loboscontrol::ListAllUsersReply* response) override;
@@ -113,8 +113,8 @@ class ControlPlane final {
     class async final :
       public StubInterface::async_interface {
      public:
-      void AddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)>) override;
-      void AddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void AddUser(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)>) override;
+      void AddUser(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) override;
       void ListAllUsers(::grpc::ClientContext* context, const ::loboscontrol::Filters* request, ::loboscontrol::ListAllUsersReply* response, std::function<void(::grpc::Status)>) override;
       void ListAllUsers(::grpc::ClientContext* context, const ::loboscontrol::Filters* request, ::loboscontrol::ListAllUsersReply* response, ::grpc::ClientUnaryReactor* reactor) override;
       void ListUser(::grpc::ClientContext* context, const ::loboscontrol::Name* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)>) override;
@@ -130,8 +130,8 @@ class ControlPlane final {
    private:
     std::shared_ptr< ::grpc::ChannelInterface> channel_;
     class async async_stub_{this};
-    ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* AsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* PrepareAsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* AsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* PrepareAsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::loboscontrol::ListAllUsersReply>* AsyncListAllUsersRaw(::grpc::ClientContext* context, const ::loboscontrol::Filters& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::loboscontrol::ListAllUsersReply>* PrepareAsyncListAllUsersRaw(::grpc::ClientContext* context, const ::loboscontrol::Filters& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* AsyncListUserRaw(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::grpc::CompletionQueue* cq) override;
@@ -148,7 +148,7 @@ class ControlPlane final {
     virtual ~Service();
     // S3 User management
     // Add user adds an S3 user
-    virtual ::grpc::Status AddUser(::grpc::ServerContext* context, const ::loboscontrol::AuthParams* request, ::loboscontrol::UserReply* response);
+    virtual ::grpc::Status AddUser(::grpc::ServerContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response);
     // ListAllUsers returns a list of all S3 users
     virtual ::grpc::Status ListAllUsers(::grpc::ServerContext* context, const ::loboscontrol::Filters* request, ::loboscontrol::ListAllUsersReply* response);
     // ListUser lists all user's infos
@@ -166,11 +166,11 @@ class ControlPlane final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status AddUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::AuthParams* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+    ::grpc::Status AddUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestAddUser(::grpc::ServerContext* context, ::loboscontrol::AuthParams* request, ::grpc::ServerAsyncResponseWriter< ::loboscontrol::UserReply>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestAddUser(::grpc::ServerContext* context, ::loboscontrol::User* request, ::grpc::ServerAsyncResponseWriter< ::loboscontrol::UserReply>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(0, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
@@ -222,25 +222,25 @@ class ControlPlane final {
    public:
     WithCallbackMethod_AddUser() {
       ::grpc::Service::MarkMethodCallback(0,
-          new ::grpc::internal::CallbackUnaryHandler< ::loboscontrol::AuthParams, ::loboscontrol::UserReply>(
+          new ::grpc::internal::CallbackUnaryHandler< ::loboscontrol::User, ::loboscontrol::UserReply>(
             [this](
-                   ::grpc::CallbackServerContext* context, const ::loboscontrol::AuthParams* request, ::loboscontrol::UserReply* response) { return this->AddUser(context, request, response); }));}
+                   ::grpc::CallbackServerContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response) { return this->AddUser(context, request, response); }));}
     void SetMessageAllocatorFor_AddUser(
-        ::grpc::MessageAllocator< ::loboscontrol::AuthParams, ::loboscontrol::UserReply>* allocator) {
+        ::grpc::MessageAllocator< ::loboscontrol::User, ::loboscontrol::UserReply>* allocator) {
       ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(0);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::loboscontrol::AuthParams, ::loboscontrol::UserReply>*>(handler)
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::loboscontrol::User, ::loboscontrol::UserReply>*>(handler)
               ->SetMessageAllocator(allocator);
     }
     ~WithCallbackMethod_AddUser() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status AddUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::AuthParams* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+    ::grpc::Status AddUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     virtual ::grpc::ServerUnaryReactor* AddUser(
-      ::grpc::CallbackServerContext* /*context*/, const ::loboscontrol::AuthParams* /*request*/, ::loboscontrol::UserReply* /*response*/)  { return nullptr; }
+      ::grpc::CallbackServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
   class WithCallbackMethod_ListAllUsers : public BaseClass {
@@ -310,7 +310,7 @@ class ControlPlane final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status AddUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::AuthParams* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+    ::grpc::Status AddUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -361,7 +361,7 @@ class ControlPlane final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status AddUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::AuthParams* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+    ::grpc::Status AddUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -424,7 +424,7 @@ class ControlPlane final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status AddUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::AuthParams* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+    ::grpc::Status AddUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -483,10 +483,10 @@ class ControlPlane final {
     WithStreamedUnaryMethod_AddUser() {
       ::grpc::Service::MarkMethodStreamed(0,
         new ::grpc::internal::StreamedUnaryHandler<
-          ::loboscontrol::AuthParams, ::loboscontrol::UserReply>(
+          ::loboscontrol::User, ::loboscontrol::UserReply>(
             [this](::grpc::ServerContext* context,
                    ::grpc::ServerUnaryStreamer<
-                     ::loboscontrol::AuthParams, ::loboscontrol::UserReply>* streamer) {
+                     ::loboscontrol::User, ::loboscontrol::UserReply>* streamer) {
                        return this->StreamedAddUser(context,
                          streamer);
                   }));
@@ -495,12 +495,12 @@ class ControlPlane final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status AddUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::AuthParams* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+    ::grpc::Status AddUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedAddUser(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::loboscontrol::AuthParams,::loboscontrol::UserReply>* server_unary_streamer) = 0;
+    virtual ::grpc::Status StreamedAddUser(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::loboscontrol::User,::loboscontrol::UserReply>* server_unary_streamer) = 0;
   };
   template <class BaseClass>
   class WithStreamedUnaryMethod_ListAllUsers : public BaseClass {

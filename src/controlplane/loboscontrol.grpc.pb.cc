@@ -39,23 +39,23 @@ ControlPlane::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& chann
   , rpcmethod_ListUser_(ControlPlane_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
-::grpc::Status ControlPlane::Stub::AddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::loboscontrol::UserReply* response) {
-  return ::grpc::internal::BlockingUnaryCall< ::loboscontrol::AuthParams, ::loboscontrol::UserReply, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_AddUser_, context, request, response);
+::grpc::Status ControlPlane::Stub::AddUser(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::loboscontrol::UserReply* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::loboscontrol::User, ::loboscontrol::UserReply, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_AddUser_, context, request, response);
 }
 
-void ControlPlane::Stub::async::AddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)> f) {
-  ::grpc::internal::CallbackUnaryCall< ::loboscontrol::AuthParams, ::loboscontrol::UserReply, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AddUser_, context, request, response, std::move(f));
+void ControlPlane::Stub::async::AddUser(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::loboscontrol::User, ::loboscontrol::UserReply, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AddUser_, context, request, response, std::move(f));
 }
 
-void ControlPlane::Stub::async::AddUser(::grpc::ClientContext* context, const ::loboscontrol::AuthParams* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) {
+void ControlPlane::Stub::async::AddUser(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) {
   ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AddUser_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* ControlPlane::Stub::PrepareAsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::grpc::CompletionQueue* cq) {
-  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::loboscontrol::UserReply, ::loboscontrol::AuthParams, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_AddUser_, context, request);
+::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* ControlPlane::Stub::PrepareAsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::loboscontrol::UserReply, ::loboscontrol::User, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_AddUser_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* ControlPlane::Stub::AsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::AuthParams& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* ControlPlane::Stub::AsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
   auto* result =
     this->PrepareAsyncAddUserRaw(context, request, cq);
   result->StartCall();
@@ -112,10 +112,10 @@ ControlPlane::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       ControlPlane_method_names[0],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< ControlPlane::Service, ::loboscontrol::AuthParams, ::loboscontrol::UserReply, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+      new ::grpc::internal::RpcMethodHandler< ControlPlane::Service, ::loboscontrol::User, ::loboscontrol::UserReply, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
           [](ControlPlane::Service* service,
              ::grpc::ServerContext* ctx,
-             const ::loboscontrol::AuthParams* req,
+             const ::loboscontrol::User* req,
              ::loboscontrol::UserReply* resp) {
                return service->AddUser(ctx, req, resp);
              }, this)));
@@ -144,7 +144,7 @@ ControlPlane::Service::Service() {
 ControlPlane::Service::~Service() {
 }
 
-::grpc::Status ControlPlane::Service::AddUser(::grpc::ServerContext* context, const ::loboscontrol::AuthParams* request, ::loboscontrol::UserReply* response) {
+::grpc::Status ControlPlane::Service::AddUser(::grpc::ServerContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response) {
   (void) context;
   (void) request;
   (void) response;

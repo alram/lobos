@@ -2,24 +2,24 @@
 #include "loboscontrol_server.hpp"
 
 grpc::Status ControlPlaneImpl::AddUser(grpc::ServerContext* ctx, 
-                    const loboscontrol::AuthParams* auth_params,
+                    const loboscontrol::User* user,
                     loboscontrol::UserReply* reply) {
 
-    if (auth_params->name() == "") {
+    if (user->name() == "") {
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "name is not specified");
     }
 
     User u {
-        auth_params->name(),
-        auth_params->key(),
-        auth_params->secret(),
-        auth_params->backend(),
+        user->name(),
+        user->key(),
+        user->secret(),
+        user->backend(),
     };
     auto user_ret = cp_->add_user(u);
     if (!user_ret)
         return grpc::Status(grpc::StatusCode::UNKNOWN, "couldn't add user");
 
-    auto* p = reply->mutable_params();
+    auto* p = reply->mutable_user();
     p->set_name(user_ret->name);
     p->set_key(user_ret->key);
     p->set_secret(user_ret->secret);
@@ -36,7 +36,7 @@ grpc::Status ControlPlaneImpl::ListAllUsers(grpc::ServerContext* ctx,
     auto users = cp_->list_all_users("");
     for (const User& u : users) {
         auto* user = reply->add_users();
-        auto* p = user->mutable_params();
+        auto* p = user->mutable_user();
         p->set_name(u.name);
         p->set_key(u.key);
         p->set_secret(u.secret);

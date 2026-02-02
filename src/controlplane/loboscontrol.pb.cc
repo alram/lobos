@@ -21,22 +21,22 @@ namespace _pb = ::PROTOBUF_NAMESPACE_ID;
 namespace _pbi = _pb::internal;
 
 namespace loboscontrol {
-PROTOBUF_CONSTEXPR AuthParams::AuthParams(
+PROTOBUF_CONSTEXPR User::User(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.key_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.secret_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.backend_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_._cached_size_)*/{}} {}
-struct AuthParamsDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR AuthParamsDefaultTypeInternal()
+struct UserDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR UserDefaultTypeInternal()
       : _instance(::_pbi::ConstantInitialized{}) {}
-  ~AuthParamsDefaultTypeInternal() {}
+  ~UserDefaultTypeInternal() {}
   union {
-    AuthParams _instance;
+    User _instance;
   };
 };
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 AuthParamsDefaultTypeInternal _AuthParams_default_instance_;
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 UserDefaultTypeInternal _User_default_instance_;
 PROTOBUF_CONSTEXPR Filters::Filters(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.message_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
@@ -78,7 +78,7 @@ struct ListAllUsersReplyDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ListAllUsersReplyDefaultTypeInternal _ListAllUsersReply_default_instance_;
 PROTOBUF_CONSTEXPR UserReply::UserReply(
     ::_pbi::ConstantInitialized): _impl_{
-    /*decltype(_impl_.params_)*/nullptr
+    /*decltype(_impl_.user_)*/nullptr
   , /*decltype(_impl_._cached_size_)*/{}} {}
 struct UserReplyDefaultTypeInternal {
   PROTOBUF_CONSTEXPR UserReplyDefaultTypeInternal()
@@ -96,15 +96,15 @@ static constexpr ::_pb::ServiceDescriptor const** file_level_service_descriptors
 
 const uint32_t TableStruct_loboscontrol_2eproto::offsets[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
   ~0u,  // no _has_bits_
-  PROTOBUF_FIELD_OFFSET(::loboscontrol::AuthParams, _internal_metadata_),
+  PROTOBUF_FIELD_OFFSET(::loboscontrol::User, _internal_metadata_),
   ~0u,  // no _extensions_
   ~0u,  // no _oneof_case_
   ~0u,  // no _weak_field_map_
   ~0u,  // no _inlined_string_donated_
-  PROTOBUF_FIELD_OFFSET(::loboscontrol::AuthParams, _impl_.name_),
-  PROTOBUF_FIELD_OFFSET(::loboscontrol::AuthParams, _impl_.key_),
-  PROTOBUF_FIELD_OFFSET(::loboscontrol::AuthParams, _impl_.secret_),
-  PROTOBUF_FIELD_OFFSET(::loboscontrol::AuthParams, _impl_.backend_),
+  PROTOBUF_FIELD_OFFSET(::loboscontrol::User, _impl_.name_),
+  PROTOBUF_FIELD_OFFSET(::loboscontrol::User, _impl_.key_),
+  PROTOBUF_FIELD_OFFSET(::loboscontrol::User, _impl_.secret_),
+  PROTOBUF_FIELD_OFFSET(::loboscontrol::User, _impl_.backend_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::loboscontrol::Filters, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -132,10 +132,10 @@ const uint32_t TableStruct_loboscontrol_2eproto::offsets[] PROTOBUF_SECTION_VARI
   ~0u,  // no _oneof_case_
   ~0u,  // no _weak_field_map_
   ~0u,  // no _inlined_string_donated_
-  PROTOBUF_FIELD_OFFSET(::loboscontrol::UserReply, _impl_.params_),
+  PROTOBUF_FIELD_OFFSET(::loboscontrol::UserReply, _impl_.user_),
 };
 static const ::_pbi::MigrationSchema schemas[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
-  { 0, -1, -1, sizeof(::loboscontrol::AuthParams)},
+  { 0, -1, -1, sizeof(::loboscontrol::User)},
   { 10, -1, -1, sizeof(::loboscontrol::Filters)},
   { 17, -1, -1, sizeof(::loboscontrol::Name)},
   { 24, -1, -1, sizeof(::loboscontrol::ListAllUsersReply)},
@@ -143,7 +143,7 @@ static const ::_pbi::MigrationSchema schemas[] PROTOBUF_SECTION_VARIABLE(protode
 };
 
 static const ::_pb::Message* const file_default_instances[] = {
-  &::loboscontrol::_AuthParams_default_instance_._instance,
+  &::loboscontrol::_User_default_instance_._instance,
   &::loboscontrol::_Filters_default_instance_._instance,
   &::loboscontrol::_Name_default_instance_._instance,
   &::loboscontrol::_ListAllUsersReply_default_instance_._instance,
@@ -151,23 +151,23 @@ static const ::_pb::Message* const file_default_instances[] = {
 };
 
 const char descriptor_table_protodef_loboscontrol_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
-  "\n\022loboscontrol.proto\022\014loboscontrol\"H\n\nAu"
-  "thParams\022\014\n\004name\030\001 \001(\t\022\013\n\003key\030\002 \001(\t\022\016\n\006s"
-  "ecret\030\003 \001(\t\022\017\n\007backend\030\004 \001(\t\"\032\n\007Filters\022"
-  "\017\n\007message\030\001 \001(\t\"\024\n\004Name\022\014\n\004name\030\001 \001(\t\";"
-  "\n\021ListAllUsersReply\022&\n\005users\030\001 \003(\0132\027.lob"
-  "oscontrol.UserReply\"5\n\tUserReply\022(\n\006para"
-  "ms\030\001 \001(\0132\030.loboscontrol.AuthParams2\323\001\n\014C"
-  "ontrolPlane\022>\n\007AddUser\022\030.loboscontrol.Au"
-  "thParams\032\027.loboscontrol.UserReply\"\000\022H\n\014L"
-  "istAllUsers\022\025.loboscontrol.Filters\032\037.lob"
-  "oscontrol.ListAllUsersReply\"\000\0229\n\010ListUse"
-  "r\022\022.loboscontrol.Name\032\027.loboscontrol.Use"
-  "rReply\"\000B\024Z\022lobos/controlplaneb\006proto3"
+  "\n\022loboscontrol.proto\022\014loboscontrol\"B\n\004Us"
+  "er\022\014\n\004name\030\001 \001(\t\022\013\n\003key\030\002 \001(\t\022\016\n\006secret\030"
+  "\003 \001(\t\022\017\n\007backend\030\004 \001(\t\"\032\n\007Filters\022\017\n\007mes"
+  "sage\030\001 \001(\t\"\024\n\004Name\022\014\n\004name\030\001 \001(\t\";\n\021List"
+  "AllUsersReply\022&\n\005users\030\001 \003(\0132\027.loboscont"
+  "rol.UserReply\"-\n\tUserReply\022 \n\004user\030\001 \001(\013"
+  "2\022.loboscontrol.User2\315\001\n\014ControlPlane\0228\n"
+  "\007AddUser\022\022.loboscontrol.User\032\027.loboscont"
+  "rol.UserReply\"\000\022H\n\014ListAllUsers\022\025.lobosc"
+  "ontrol.Filters\032\037.loboscontrol.ListAllUse"
+  "rsReply\"\000\0229\n\010ListUser\022\022.loboscontrol.Nam"
+  "e\032\027.loboscontrol.UserReply\"\000B\024Z\022lobos/co"
+  "ntrolplaneb\006proto3"
   ;
 static ::_pbi::once_flag descriptor_table_loboscontrol_2eproto_once;
 const ::_pbi::DescriptorTable descriptor_table_loboscontrol_2eproto = {
-    false, false, 518, descriptor_table_protodef_loboscontrol_2eproto,
+    false, false, 498, descriptor_table_protodef_loboscontrol_2eproto,
     "loboscontrol.proto",
     &descriptor_table_loboscontrol_2eproto_once, nullptr, 0, 5,
     schemas, file_default_instances, TableStruct_loboscontrol_2eproto::offsets,
@@ -184,19 +184,19 @@ namespace loboscontrol {
 
 // ===================================================================
 
-class AuthParams::_Internal {
+class User::_Internal {
  public:
 };
 
-AuthParams::AuthParams(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+User::User(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
   SharedCtor(arena, is_message_owned);
-  // @@protoc_insertion_point(arena_constructor:loboscontrol.AuthParams)
+  // @@protoc_insertion_point(arena_constructor:loboscontrol.User)
 }
-AuthParams::AuthParams(const AuthParams& from)
+User::User(const User& from)
   : ::PROTOBUF_NAMESPACE_ID::Message() {
-  AuthParams* const _this = this; (void)_this;
+  User* const _this = this; (void)_this;
   new (&_impl_) Impl_{
       decltype(_impl_.name_){}
     , decltype(_impl_.key_){}
@@ -237,10 +237,10 @@ AuthParams::AuthParams(const AuthParams& from)
     _this->_impl_.backend_.Set(from._internal_backend(), 
       _this->GetArenaForAllocation());
   }
-  // @@protoc_insertion_point(copy_constructor:loboscontrol.AuthParams)
+  // @@protoc_insertion_point(copy_constructor:loboscontrol.User)
 }
 
-inline void AuthParams::SharedCtor(
+inline void User::SharedCtor(
     ::_pb::Arena* arena, bool is_message_owned) {
   (void)arena;
   (void)is_message_owned;
@@ -269,8 +269,8 @@ inline void AuthParams::SharedCtor(
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 }
 
-AuthParams::~AuthParams() {
-  // @@protoc_insertion_point(destructor:loboscontrol.AuthParams)
+User::~User() {
+  // @@protoc_insertion_point(destructor:loboscontrol.User)
   if (auto *arena = _internal_metadata_.DeleteReturnArena<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>()) {
   (void)arena;
     return;
@@ -278,7 +278,7 @@ AuthParams::~AuthParams() {
   SharedDtor();
 }
 
-inline void AuthParams::SharedDtor() {
+inline void User::SharedDtor() {
   GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
   _impl_.name_.Destroy();
   _impl_.key_.Destroy();
@@ -286,12 +286,12 @@ inline void AuthParams::SharedDtor() {
   _impl_.backend_.Destroy();
 }
 
-void AuthParams::SetCachedSize(int size) const {
+void User::SetCachedSize(int size) const {
   _impl_._cached_size_.Set(size);
 }
 
-void AuthParams::Clear() {
-// @@protoc_insertion_point(message_clear_start:loboscontrol.AuthParams)
+void User::Clear() {
+// @@protoc_insertion_point(message_clear_start:loboscontrol.User)
   uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
@@ -303,7 +303,7 @@ void AuthParams::Clear() {
   _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
-const char* AuthParams::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+const char* User::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
 #define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
   while (!ctx->Done(&ptr)) {
     uint32_t tag;
@@ -315,7 +315,7 @@ const char* AuthParams::_InternalParse(const char* ptr, ::_pbi::ParseContext* ct
           auto str = _internal_mutable_name();
           ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
           CHK_(ptr);
-          CHK_(::_pbi::VerifyUTF8(str, "loboscontrol.AuthParams.name"));
+          CHK_(::_pbi::VerifyUTF8(str, "loboscontrol.User.name"));
         } else
           goto handle_unusual;
         continue;
@@ -325,7 +325,7 @@ const char* AuthParams::_InternalParse(const char* ptr, ::_pbi::ParseContext* ct
           auto str = _internal_mutable_key();
           ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
           CHK_(ptr);
-          CHK_(::_pbi::VerifyUTF8(str, "loboscontrol.AuthParams.key"));
+          CHK_(::_pbi::VerifyUTF8(str, "loboscontrol.User.key"));
         } else
           goto handle_unusual;
         continue;
@@ -335,7 +335,7 @@ const char* AuthParams::_InternalParse(const char* ptr, ::_pbi::ParseContext* ct
           auto str = _internal_mutable_secret();
           ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
           CHK_(ptr);
-          CHK_(::_pbi::VerifyUTF8(str, "loboscontrol.AuthParams.secret"));
+          CHK_(::_pbi::VerifyUTF8(str, "loboscontrol.User.secret"));
         } else
           goto handle_unusual;
         continue;
@@ -345,7 +345,7 @@ const char* AuthParams::_InternalParse(const char* ptr, ::_pbi::ParseContext* ct
           auto str = _internal_mutable_backend();
           ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
           CHK_(ptr);
-          CHK_(::_pbi::VerifyUTF8(str, "loboscontrol.AuthParams.backend"));
+          CHK_(::_pbi::VerifyUTF8(str, "loboscontrol.User.backend"));
         } else
           goto handle_unusual;
         continue;
@@ -372,9 +372,9 @@ failure:
 #undef CHK_
 }
 
-uint8_t* AuthParams::_InternalSerialize(
+uint8_t* User::_InternalSerialize(
     uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
-  // @@protoc_insertion_point(serialize_to_array_start:loboscontrol.AuthParams)
+  // @@protoc_insertion_point(serialize_to_array_start:loboscontrol.User)
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
@@ -383,7 +383,7 @@ uint8_t* AuthParams::_InternalSerialize(
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
-      "loboscontrol.AuthParams.name");
+      "loboscontrol.User.name");
     target = stream->WriteStringMaybeAliased(
         1, this->_internal_name(), target);
   }
@@ -393,7 +393,7 @@ uint8_t* AuthParams::_InternalSerialize(
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_key().data(), static_cast<int>(this->_internal_key().length()),
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
-      "loboscontrol.AuthParams.key");
+      "loboscontrol.User.key");
     target = stream->WriteStringMaybeAliased(
         2, this->_internal_key(), target);
   }
@@ -403,7 +403,7 @@ uint8_t* AuthParams::_InternalSerialize(
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_secret().data(), static_cast<int>(this->_internal_secret().length()),
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
-      "loboscontrol.AuthParams.secret");
+      "loboscontrol.User.secret");
     target = stream->WriteStringMaybeAliased(
         3, this->_internal_secret(), target);
   }
@@ -413,7 +413,7 @@ uint8_t* AuthParams::_InternalSerialize(
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_backend().data(), static_cast<int>(this->_internal_backend().length()),
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
-      "loboscontrol.AuthParams.backend");
+      "loboscontrol.User.backend");
     target = stream->WriteStringMaybeAliased(
         4, this->_internal_backend(), target);
   }
@@ -422,12 +422,12 @@ uint8_t* AuthParams::_InternalSerialize(
     target = ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
         _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
   }
-  // @@protoc_insertion_point(serialize_to_array_end:loboscontrol.AuthParams)
+  // @@protoc_insertion_point(serialize_to_array_end:loboscontrol.User)
   return target;
 }
 
-size_t AuthParams::ByteSizeLong() const {
-// @@protoc_insertion_point(message_byte_size_start:loboscontrol.AuthParams)
+size_t User::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:loboscontrol.User)
   size_t total_size = 0;
 
   uint32_t cached_has_bits = 0;
@@ -465,17 +465,17 @@ size_t AuthParams::ByteSizeLong() const {
   return MaybeComputeUnknownFieldsSize(total_size, &_impl_._cached_size_);
 }
 
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData AuthParams::_class_data_ = {
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData User::_class_data_ = {
     ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSourceCheck,
-    AuthParams::MergeImpl
+    User::MergeImpl
 };
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*AuthParams::GetClassData() const { return &_class_data_; }
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*User::GetClassData() const { return &_class_data_; }
 
 
-void AuthParams::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg) {
-  auto* const _this = static_cast<AuthParams*>(&to_msg);
-  auto& from = static_cast<const AuthParams&>(from_msg);
-  // @@protoc_insertion_point(class_specific_merge_from_start:loboscontrol.AuthParams)
+void User::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg) {
+  auto* const _this = static_cast<User*>(&to_msg);
+  auto& from = static_cast<const User&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:loboscontrol.User)
   GOOGLE_DCHECK_NE(&from, _this);
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
@@ -495,18 +495,18 @@ void AuthParams::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PRO
   _this->_internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
 
-void AuthParams::CopyFrom(const AuthParams& from) {
-// @@protoc_insertion_point(class_specific_copy_from_start:loboscontrol.AuthParams)
+void User::CopyFrom(const User& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:loboscontrol.User)
   if (&from == this) return;
   Clear();
   MergeFrom(from);
 }
 
-bool AuthParams::IsInitialized() const {
+bool User::IsInitialized() const {
   return true;
 }
 
-void AuthParams::InternalSwap(AuthParams* other) {
+void User::InternalSwap(User* other) {
   using std::swap;
   auto* lhs_arena = GetArenaForAllocation();
   auto* rhs_arena = other->GetArenaForAllocation();
@@ -529,7 +529,7 @@ void AuthParams::InternalSwap(AuthParams* other) {
   );
 }
 
-::PROTOBUF_NAMESPACE_ID::Metadata AuthParams::GetMetadata() const {
+::PROTOBUF_NAMESPACE_ID::Metadata User::GetMetadata() const {
   return ::_pbi::AssignDescriptors(
       &descriptor_table_loboscontrol_2eproto_getter, &descriptor_table_loboscontrol_2eproto_once,
       file_level_metadata_loboscontrol_2eproto[0]);
@@ -1130,12 +1130,12 @@ void ListAllUsersReply::InternalSwap(ListAllUsersReply* other) {
 
 class UserReply::_Internal {
  public:
-  static const ::loboscontrol::AuthParams& params(const UserReply* msg);
+  static const ::loboscontrol::User& user(const UserReply* msg);
 };
 
-const ::loboscontrol::AuthParams&
-UserReply::_Internal::params(const UserReply* msg) {
-  return *msg->_impl_.params_;
+const ::loboscontrol::User&
+UserReply::_Internal::user(const UserReply* msg) {
+  return *msg->_impl_.user_;
 }
 UserReply::UserReply(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
@@ -1147,12 +1147,12 @@ UserReply::UserReply(const UserReply& from)
   : ::PROTOBUF_NAMESPACE_ID::Message() {
   UserReply* const _this = this; (void)_this;
   new (&_impl_) Impl_{
-      decltype(_impl_.params_){nullptr}
+      decltype(_impl_.user_){nullptr}
     , /*decltype(_impl_._cached_size_)*/{}};
 
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
-  if (from._internal_has_params()) {
-    _this->_impl_.params_ = new ::loboscontrol::AuthParams(*from._impl_.params_);
+  if (from._internal_has_user()) {
+    _this->_impl_.user_ = new ::loboscontrol::User(*from._impl_.user_);
   }
   // @@protoc_insertion_point(copy_constructor:loboscontrol.UserReply)
 }
@@ -1162,7 +1162,7 @@ inline void UserReply::SharedCtor(
   (void)arena;
   (void)is_message_owned;
   new (&_impl_) Impl_{
-      decltype(_impl_.params_){nullptr}
+      decltype(_impl_.user_){nullptr}
     , /*decltype(_impl_._cached_size_)*/{}
   };
 }
@@ -1178,7 +1178,7 @@ UserReply::~UserReply() {
 
 inline void UserReply::SharedDtor() {
   GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
-  if (this != internal_default_instance()) delete _impl_.params_;
+  if (this != internal_default_instance()) delete _impl_.user_;
 }
 
 void UserReply::SetCachedSize(int size) const {
@@ -1191,10 +1191,10 @@ void UserReply::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  if (GetArenaForAllocation() == nullptr && _impl_.params_ != nullptr) {
-    delete _impl_.params_;
+  if (GetArenaForAllocation() == nullptr && _impl_.user_ != nullptr) {
+    delete _impl_.user_;
   }
-  _impl_.params_ = nullptr;
+  _impl_.user_ = nullptr;
   _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
@@ -1204,10 +1204,10 @@ const char* UserReply::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx
     uint32_t tag;
     ptr = ::_pbi::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .loboscontrol.AuthParams params = 1;
+      // .loboscontrol.User user = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
-          ptr = ctx->ParseMessage(_internal_mutable_params(), ptr);
+          ptr = ctx->ParseMessage(_internal_mutable_user(), ptr);
           CHK_(ptr);
         } else
           goto handle_unusual;
@@ -1241,11 +1241,11 @@ uint8_t* UserReply::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .loboscontrol.AuthParams params = 1;
-  if (this->_internal_has_params()) {
+  // .loboscontrol.User user = 1;
+  if (this->_internal_has_user()) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
-      InternalWriteMessage(1, _Internal::params(this),
-        _Internal::params(this).GetCachedSize(), target, stream);
+      InternalWriteMessage(1, _Internal::user(this),
+        _Internal::user(this).GetCachedSize(), target, stream);
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -1264,11 +1264,11 @@ size_t UserReply::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .loboscontrol.AuthParams params = 1;
-  if (this->_internal_has_params()) {
+  // .loboscontrol.User user = 1;
+  if (this->_internal_has_user()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
-        *_impl_.params_);
+        *_impl_.user_);
   }
 
   return MaybeComputeUnknownFieldsSize(total_size, &_impl_._cached_size_);
@@ -1289,9 +1289,9 @@ void UserReply::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROT
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  if (from._internal_has_params()) {
-    _this->_internal_mutable_params()->::loboscontrol::AuthParams::MergeFrom(
-        from._internal_params());
+  if (from._internal_has_user()) {
+    _this->_internal_mutable_user()->::loboscontrol::User::MergeFrom(
+        from._internal_user());
   }
   _this->_internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
@@ -1310,7 +1310,7 @@ bool UserReply::IsInitialized() const {
 void UserReply::InternalSwap(UserReply* other) {
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(_impl_.params_, other->_impl_.params_);
+  swap(_impl_.user_, other->_impl_.user_);
 }
 
 ::PROTOBUF_NAMESPACE_ID::Metadata UserReply::GetMetadata() const {
@@ -1322,9 +1322,9 @@ void UserReply::InternalSwap(UserReply* other) {
 // @@protoc_insertion_point(namespace_scope)
 }  // namespace loboscontrol
 PROTOBUF_NAMESPACE_OPEN
-template<> PROTOBUF_NOINLINE ::loboscontrol::AuthParams*
-Arena::CreateMaybeMessage< ::loboscontrol::AuthParams >(Arena* arena) {
-  return Arena::CreateMessageInternal< ::loboscontrol::AuthParams >(arena);
+template<> PROTOBUF_NOINLINE ::loboscontrol::User*
+Arena::CreateMaybeMessage< ::loboscontrol::User >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::loboscontrol::User >(arena);
 }
 template<> PROTOBUF_NOINLINE ::loboscontrol::Filters*
 Arena::CreateMaybeMessage< ::loboscontrol::Filters >(Arena* arena) {

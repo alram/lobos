@@ -11,19 +11,6 @@
 #include "../store/store.hpp"
 #include "../common/common.hpp"
 
-class ControlPlaneImpl final : public loboscontrol::ControlPlane::Service {
-public:
-    explicit ControlPlaneImpl(ControlPlane* cp) : cp_(cp) {}
-    grpc::Status AddUser(grpc::ServerContext* ctx, 
-                        const loboscontrol::AuthParams* auth_params,
-                        loboscontrol::UserReply* reply) override;
-    grpc::Status ListAllUsers(grpc::ServerContext* ctx, 
-                        const loboscontrol::Filters* filters, 
-                        loboscontrol::ListAllUsersReply* reply) override;
-private:
-    ControlPlane* cp_;
-};
-
 class ControlPlane {
 public:
     ControlPlane(Store& store, std::unordered_map<std::string, std::string>& s3_users) 
@@ -44,4 +31,17 @@ public:
 private:
     std::thread grpc_thread_;
     std::unique_ptr<grpc::Server> server_;
+};
+
+class ControlPlaneImpl final : public loboscontrol::ControlPlane::Service {
+public:
+    explicit ControlPlaneImpl(ControlPlane* cp) : cp_(cp) {}
+    grpc::Status AddUser(grpc::ServerContext* ctx, 
+                        const loboscontrol::User* user,
+                        loboscontrol::UserReply* reply) override;
+    grpc::Status ListAllUsers(grpc::ServerContext* ctx, 
+                        const loboscontrol::Filters* filters, 
+                        loboscontrol::ListAllUsersReply* reply) override;
+private:
+    ControlPlane* cp_;
 };
