@@ -23,14 +23,17 @@ public:
     asio::awaitable<void> do_list(std::string_view prefix, session_buffer& buffer) override;
     asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string_view o) override;
     void shutdown_store() override {};
-    
+    // MPU
     asio::awaitable<int> do_create_mpu(std::string_view o, std::string uploadId) override;
     std::unordered_map<std::string, Multipart> get_active_mpus() override;
     asio::awaitable<int> do_assemble_mpu(std::string upload_id, Multipart mp, std::vector<int> parts) override;
     asio::awaitable<int> do_abort_mpu(std::string upload_id, Multipart mp) override;
-    
+    // Control plane
     int metadata_add_user(User u) override;
     std::vector<User> metadata_list_users(std::string filter) override;
+    bool metadata_remove_user(std::string& name) override;
+    int metadata_add_key(User u) override;
+    bool metadata_rm_key(std::string user, std::string key) override;
 
 private:
     static std::string create_dest_dirs_if_not_exist(std::string object);

@@ -24,7 +24,9 @@ namespace loboscontrol {
 static const char* ControlPlane_method_names[] = {
   "/loboscontrol.ControlPlane/AddUser",
   "/loboscontrol.ControlPlane/ListAllUsers",
-  "/loboscontrol.ControlPlane/ListUser",
+  "/loboscontrol.ControlPlane/RmUser",
+  "/loboscontrol.ControlPlane/AddKey",
+  "/loboscontrol.ControlPlane/RmKey",
 };
 
 std::unique_ptr< ControlPlane::Stub> ControlPlane::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -36,7 +38,9 @@ std::unique_ptr< ControlPlane::Stub> ControlPlane::NewStub(const std::shared_ptr
 ControlPlane::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options)
   : channel_(channel), rpcmethod_AddUser_(ControlPlane_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_ListAllUsers_(ControlPlane_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_ListUser_(ControlPlane_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_RmUser_(ControlPlane_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_AddKey_(ControlPlane_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_RmKey_(ControlPlane_method_names[4], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
 ::grpc::Status ControlPlane::Stub::AddUser(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::loboscontrol::UserReply* response) {
@@ -85,25 +89,71 @@ void ControlPlane::Stub::async::ListAllUsers(::grpc::ClientContext* context, con
   return result;
 }
 
-::grpc::Status ControlPlane::Stub::ListUser(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::loboscontrol::UserReply* response) {
-  return ::grpc::internal::BlockingUnaryCall< ::loboscontrol::Name, ::loboscontrol::UserReply, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_ListUser_, context, request, response);
+::grpc::Status ControlPlane::Stub::RmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::google::protobuf::BoolValue* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::loboscontrol::RmUserParams, ::google::protobuf::BoolValue, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_RmUser_, context, request, response);
 }
 
-void ControlPlane::Stub::async::ListUser(::grpc::ClientContext* context, const ::loboscontrol::Name* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)> f) {
-  ::grpc::internal::CallbackUnaryCall< ::loboscontrol::Name, ::loboscontrol::UserReply, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_ListUser_, context, request, response, std::move(f));
+void ControlPlane::Stub::async::RmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams* request, ::google::protobuf::BoolValue* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::loboscontrol::RmUserParams, ::google::protobuf::BoolValue, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RmUser_, context, request, response, std::move(f));
 }
 
-void ControlPlane::Stub::async::ListUser(::grpc::ClientContext* context, const ::loboscontrol::Name* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) {
-  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_ListUser_, context, request, response, reactor);
+void ControlPlane::Stub::async::RmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams* request, ::google::protobuf::BoolValue* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RmUser_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* ControlPlane::Stub::PrepareAsyncListUserRaw(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::grpc::CompletionQueue* cq) {
-  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::loboscontrol::UserReply, ::loboscontrol::Name, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_ListUser_, context, request);
+::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>* ControlPlane::Stub::PrepareAsyncRmUserRaw(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::google::protobuf::BoolValue, ::loboscontrol::RmUserParams, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_RmUser_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* ControlPlane::Stub::AsyncListUserRaw(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>* ControlPlane::Stub::AsyncRmUserRaw(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::grpc::CompletionQueue* cq) {
   auto* result =
-    this->PrepareAsyncListUserRaw(context, request, cq);
+    this->PrepareAsyncRmUserRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status ControlPlane::Stub::AddKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::loboscontrol::UserReply* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::loboscontrol::User, ::loboscontrol::UserReply, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_AddKey_, context, request, response);
+}
+
+void ControlPlane::Stub::async::AddKey(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::loboscontrol::User, ::loboscontrol::UserReply, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AddKey_, context, request, response, std::move(f));
+}
+
+void ControlPlane::Stub::async::AddKey(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AddKey_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* ControlPlane::Stub::PrepareAsyncAddKeyRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::loboscontrol::UserReply, ::loboscontrol::User, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_AddKey_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* ControlPlane::Stub::AsyncAddKeyRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncAddKeyRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status ControlPlane::Stub::RmKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::google::protobuf::BoolValue* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::loboscontrol::User, ::google::protobuf::BoolValue, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_RmKey_, context, request, response);
+}
+
+void ControlPlane::Stub::async::RmKey(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::google::protobuf::BoolValue* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::loboscontrol::User, ::google::protobuf::BoolValue, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RmKey_, context, request, response, std::move(f));
+}
+
+void ControlPlane::Stub::async::RmKey(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::google::protobuf::BoolValue* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RmKey_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>* ControlPlane::Stub::PrepareAsyncRmKeyRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::google::protobuf::BoolValue, ::loboscontrol::User, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_RmKey_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>* ControlPlane::Stub::AsyncRmKeyRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncRmKeyRaw(context, request, cq);
   result->StartCall();
   return result;
 }
@@ -132,12 +182,32 @@ ControlPlane::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       ControlPlane_method_names[2],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< ControlPlane::Service, ::loboscontrol::Name, ::loboscontrol::UserReply, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+      new ::grpc::internal::RpcMethodHandler< ControlPlane::Service, ::loboscontrol::RmUserParams, ::google::protobuf::BoolValue, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
           [](ControlPlane::Service* service,
              ::grpc::ServerContext* ctx,
-             const ::loboscontrol::Name* req,
+             const ::loboscontrol::RmUserParams* req,
+             ::google::protobuf::BoolValue* resp) {
+               return service->RmUser(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      ControlPlane_method_names[3],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< ControlPlane::Service, ::loboscontrol::User, ::loboscontrol::UserReply, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ControlPlane::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::loboscontrol::User* req,
              ::loboscontrol::UserReply* resp) {
-               return service->ListUser(ctx, req, resp);
+               return service->AddKey(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      ControlPlane_method_names[4],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< ControlPlane::Service, ::loboscontrol::User, ::google::protobuf::BoolValue, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ControlPlane::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::loboscontrol::User* req,
+             ::google::protobuf::BoolValue* resp) {
+               return service->RmKey(ctx, req, resp);
              }, this)));
 }
 
@@ -158,7 +228,21 @@ ControlPlane::Service::~Service() {
   return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
-::grpc::Status ControlPlane::Service::ListUser(::grpc::ServerContext* context, const ::loboscontrol::Name* request, ::loboscontrol::UserReply* response) {
+::grpc::Status ControlPlane::Service::RmUser(::grpc::ServerContext* context, const ::loboscontrol::RmUserParams* request, ::google::protobuf::BoolValue* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status ControlPlane::Service::AddKey(::grpc::ServerContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status ControlPlane::Service::RmKey(::grpc::ServerContext* context, const ::loboscontrol::User* request, ::google::protobuf::BoolValue* response) {
   (void) context;
   (void) request;
   (void) response;

@@ -21,6 +21,20 @@ namespace _pb = ::PROTOBUF_NAMESPACE_ID;
 namespace _pbi = _pb::internal;
 
 namespace loboscontrol {
+PROTOBUF_CONSTEXPR RmUserParams::RmUserParams(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.force_)*/false
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct RmUserParamsDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RmUserParamsDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RmUserParamsDefaultTypeInternal() {}
+  union {
+    RmUserParams _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RmUserParamsDefaultTypeInternal _RmUserParams_default_instance_;
 PROTOBUF_CONSTEXPR User::User(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
@@ -50,19 +64,6 @@ struct FiltersDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 FiltersDefaultTypeInternal _Filters_default_instance_;
-PROTOBUF_CONSTEXPR Name::Name(
-    ::_pbi::ConstantInitialized): _impl_{
-    /*decltype(_impl_.name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
-  , /*decltype(_impl_._cached_size_)*/{}} {}
-struct NameDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR NameDefaultTypeInternal()
-      : _instance(::_pbi::ConstantInitialized{}) {}
-  ~NameDefaultTypeInternal() {}
-  union {
-    Name _instance;
-  };
-};
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 NameDefaultTypeInternal _Name_default_instance_;
 PROTOBUF_CONSTEXPR ListAllUsersReply::ListAllUsersReply(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.users_)*/{}
@@ -96,6 +97,14 @@ static constexpr ::_pb::ServiceDescriptor const** file_level_service_descriptors
 
 const uint32_t TableStruct_loboscontrol_2eproto::offsets[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
   ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::loboscontrol::RmUserParams, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::loboscontrol::RmUserParams, _impl_.name_),
+  PROTOBUF_FIELD_OFFSET(::loboscontrol::RmUserParams, _impl_.force_),
+  ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::loboscontrol::User, _internal_metadata_),
   ~0u,  // no _extensions_
   ~0u,  // no _oneof_case_
@@ -113,13 +122,6 @@ const uint32_t TableStruct_loboscontrol_2eproto::offsets[] PROTOBUF_SECTION_VARI
   ~0u,  // no _inlined_string_donated_
   PROTOBUF_FIELD_OFFSET(::loboscontrol::Filters, _impl_.message_),
   ~0u,  // no _has_bits_
-  PROTOBUF_FIELD_OFFSET(::loboscontrol::Name, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  ~0u,  // no _inlined_string_donated_
-  PROTOBUF_FIELD_OFFSET(::loboscontrol::Name, _impl_.name_),
-  ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::loboscontrol::ListAllUsersReply, _internal_metadata_),
   ~0u,  // no _extensions_
   ~0u,  // no _oneof_case_
@@ -135,41 +137,48 @@ const uint32_t TableStruct_loboscontrol_2eproto::offsets[] PROTOBUF_SECTION_VARI
   PROTOBUF_FIELD_OFFSET(::loboscontrol::UserReply, _impl_.user_),
 };
 static const ::_pbi::MigrationSchema schemas[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
-  { 0, -1, -1, sizeof(::loboscontrol::User)},
-  { 10, -1, -1, sizeof(::loboscontrol::Filters)},
-  { 17, -1, -1, sizeof(::loboscontrol::Name)},
-  { 24, -1, -1, sizeof(::loboscontrol::ListAllUsersReply)},
-  { 31, -1, -1, sizeof(::loboscontrol::UserReply)},
+  { 0, -1, -1, sizeof(::loboscontrol::RmUserParams)},
+  { 8, -1, -1, sizeof(::loboscontrol::User)},
+  { 18, -1, -1, sizeof(::loboscontrol::Filters)},
+  { 25, -1, -1, sizeof(::loboscontrol::ListAllUsersReply)},
+  { 32, -1, -1, sizeof(::loboscontrol::UserReply)},
 };
 
 static const ::_pb::Message* const file_default_instances[] = {
+  &::loboscontrol::_RmUserParams_default_instance_._instance,
   &::loboscontrol::_User_default_instance_._instance,
   &::loboscontrol::_Filters_default_instance_._instance,
-  &::loboscontrol::_Name_default_instance_._instance,
   &::loboscontrol::_ListAllUsersReply_default_instance_._instance,
   &::loboscontrol::_UserReply_default_instance_._instance,
 };
 
 const char descriptor_table_protodef_loboscontrol_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
-  "\n\022loboscontrol.proto\022\014loboscontrol\"B\n\004Us"
-  "er\022\014\n\004name\030\001 \001(\t\022\013\n\003key\030\002 \001(\t\022\016\n\006secret\030"
-  "\003 \001(\t\022\017\n\007backend\030\004 \001(\t\"\032\n\007Filters\022\017\n\007mes"
-  "sage\030\001 \001(\t\"\024\n\004Name\022\014\n\004name\030\001 \001(\t\";\n\021List"
-  "AllUsersReply\022&\n\005users\030\001 \003(\0132\027.loboscont"
-  "rol.UserReply\"-\n\tUserReply\022 \n\004user\030\001 \001(\013"
-  "2\022.loboscontrol.User2\315\001\n\014ControlPlane\0228\n"
-  "\007AddUser\022\022.loboscontrol.User\032\027.loboscont"
-  "rol.UserReply\"\000\022H\n\014ListAllUsers\022\025.lobosc"
-  "ontrol.Filters\032\037.loboscontrol.ListAllUse"
-  "rsReply\"\000\0229\n\010ListUser\022\022.loboscontrol.Nam"
-  "e\032\027.loboscontrol.UserReply\"\000B\024Z\022lobos/co"
-  "ntrolplaneb\006proto3"
+  "\n\022loboscontrol.proto\022\014loboscontrol\032\036goog"
+  "le/protobuf/wrappers.proto\"+\n\014RmUserPara"
+  "ms\022\014\n\004name\030\001 \001(\t\022\r\n\005force\030\002 \001(\010\"B\n\004User\022"
+  "\014\n\004name\030\001 \001(\t\022\013\n\003key\030\002 \001(\t\022\016\n\006secret\030\003 \001"
+  "(\t\022\017\n\007backend\030\004 \001(\t\"\032\n\007Filters\022\017\n\007messag"
+  "e\030\001 \001(\t\";\n\021ListAllUsersReply\022&\n\005users\030\001 "
+  "\003(\0132\027.loboscontrol.UserReply\"-\n\tUserRepl"
+  "y\022 \n\004user\030\001 \001(\0132\022.loboscontrol.User2\312\002\n\014"
+  "ControlPlane\0228\n\007AddUser\022\022.loboscontrol.U"
+  "ser\032\027.loboscontrol.UserReply\"\000\022H\n\014ListAl"
+  "lUsers\022\025.loboscontrol.Filters\032\037.loboscon"
+  "trol.ListAllUsersReply\"\000\022B\n\006RmUser\022\032.lob"
+  "oscontrol.RmUserParams\032\032.google.protobuf"
+  ".BoolValue\"\000\0227\n\006AddKey\022\022.loboscontrol.Us"
+  "er\032\027.loboscontrol.UserReply\"\000\0229\n\005RmKey\022\022"
+  ".loboscontrol.User\032\032.google.protobuf.Boo"
+  "lValue\"\000B\024Z\022lobos/controlplaneb\006proto3"
   ;
+static const ::_pbi::DescriptorTable* const descriptor_table_loboscontrol_2eproto_deps[1] = {
+  &::descriptor_table_google_2fprotobuf_2fwrappers_2eproto,
+};
 static ::_pbi::once_flag descriptor_table_loboscontrol_2eproto_once;
 const ::_pbi::DescriptorTable descriptor_table_loboscontrol_2eproto = {
-    false, false, 498, descriptor_table_protodef_loboscontrol_2eproto,
+    false, false, 678, descriptor_table_protodef_loboscontrol_2eproto,
     "loboscontrol.proto",
-    &descriptor_table_loboscontrol_2eproto_once, nullptr, 0, 5,
+    &descriptor_table_loboscontrol_2eproto_once, descriptor_table_loboscontrol_2eproto_deps, 1, 5,
     schemas, file_default_instances, TableStruct_loboscontrol_2eproto::offsets,
     file_level_metadata_loboscontrol_2eproto, file_level_enum_descriptors_loboscontrol_2eproto,
     file_level_service_descriptors_loboscontrol_2eproto,
@@ -181,6 +190,236 @@ PROTOBUF_ATTRIBUTE_WEAK const ::_pbi::DescriptorTable* descriptor_table_loboscon
 // Force running AddDescriptors() at dynamic initialization time.
 PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 static ::_pbi::AddDescriptorsRunner dynamic_init_dummy_loboscontrol_2eproto(&descriptor_table_loboscontrol_2eproto);
 namespace loboscontrol {
+
+// ===================================================================
+
+class RmUserParams::_Internal {
+ public:
+};
+
+RmUserParams::RmUserParams(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:loboscontrol.RmUserParams)
+}
+RmUserParams::RmUserParams(const RmUserParams& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  RmUserParams* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.name_){}
+    , decltype(_impl_.force_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _impl_.name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_name().empty()) {
+    _this->_impl_.name_.Set(from._internal_name(), 
+      _this->GetArenaForAllocation());
+  }
+  _this->_impl_.force_ = from._impl_.force_;
+  // @@protoc_insertion_point(copy_constructor:loboscontrol.RmUserParams)
+}
+
+inline void RmUserParams::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.name_){}
+    , decltype(_impl_.force_){false}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+RmUserParams::~RmUserParams() {
+  // @@protoc_insertion_point(destructor:loboscontrol.RmUserParams)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void RmUserParams::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.name_.Destroy();
+}
+
+void RmUserParams::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void RmUserParams::Clear() {
+// @@protoc_insertion_point(message_clear_start:loboscontrol.RmUserParams)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.name_.ClearToEmpty();
+  _impl_.force_ = false;
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* RmUserParams::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // string name = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          auto str = _internal_mutable_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "loboscontrol.RmUserParams.name"));
+        } else
+          goto handle_unusual;
+        continue;
+      // bool force = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.force_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* RmUserParams::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:loboscontrol.RmUserParams)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // string name = 1;
+  if (!this->_internal_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "loboscontrol.RmUserParams.name");
+    target = stream->WriteStringMaybeAliased(
+        1, this->_internal_name(), target);
+  }
+
+  // bool force = 2;
+  if (this->_internal_force() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(2, this->_internal_force(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:loboscontrol.RmUserParams)
+  return target;
+}
+
+size_t RmUserParams::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:loboscontrol.RmUserParams)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string name = 1;
+  if (!this->_internal_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_name());
+  }
+
+  // bool force = 2;
+  if (this->_internal_force() != 0) {
+    total_size += 1 + 1;
+  }
+
+  return MaybeComputeUnknownFieldsSize(total_size, &_impl_._cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData RmUserParams::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSourceCheck,
+    RmUserParams::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*RmUserParams::GetClassData() const { return &_class_data_; }
+
+
+void RmUserParams::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg) {
+  auto* const _this = static_cast<RmUserParams*>(&to_msg);
+  auto& from = static_cast<const RmUserParams&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:loboscontrol.RmUserParams)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_name().empty()) {
+    _this->_internal_set_name(from._internal_name());
+  }
+  if (from._internal_force() != 0) {
+    _this->_internal_set_force(from._internal_force());
+  }
+  _this->_internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void RmUserParams::CopyFrom(const RmUserParams& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:loboscontrol.RmUserParams)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool RmUserParams::IsInitialized() const {
+  return true;
+}
+
+void RmUserParams::InternalSwap(RmUserParams* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.name_, lhs_arena,
+      &other->_impl_.name_, rhs_arena
+  );
+  swap(_impl_.force_, other->_impl_.force_);
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata RmUserParams::GetMetadata() const {
+  return ::_pbi::AssignDescriptors(
+      &descriptor_table_loboscontrol_2eproto_getter, &descriptor_table_loboscontrol_2eproto_once,
+      file_level_metadata_loboscontrol_2eproto[0]);
+}
 
 // ===================================================================
 
@@ -532,7 +771,7 @@ void User::InternalSwap(User* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata User::GetMetadata() const {
   return ::_pbi::AssignDescriptors(
       &descriptor_table_loboscontrol_2eproto_getter, &descriptor_table_loboscontrol_2eproto_once,
-      file_level_metadata_loboscontrol_2eproto[0]);
+      file_level_metadata_loboscontrol_2eproto[1]);
 }
 
 // ===================================================================
@@ -733,209 +972,6 @@ void Filters::InternalSwap(Filters* other) {
 }
 
 ::PROTOBUF_NAMESPACE_ID::Metadata Filters::GetMetadata() const {
-  return ::_pbi::AssignDescriptors(
-      &descriptor_table_loboscontrol_2eproto_getter, &descriptor_table_loboscontrol_2eproto_once,
-      file_level_metadata_loboscontrol_2eproto[1]);
-}
-
-// ===================================================================
-
-class Name::_Internal {
- public:
-};
-
-Name::Name(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                         bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
-  SharedCtor(arena, is_message_owned);
-  // @@protoc_insertion_point(arena_constructor:loboscontrol.Name)
-}
-Name::Name(const Name& from)
-  : ::PROTOBUF_NAMESPACE_ID::Message() {
-  Name* const _this = this; (void)_this;
-  new (&_impl_) Impl_{
-      decltype(_impl_.name_){}
-    , /*decltype(_impl_._cached_size_)*/{}};
-
-  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
-  _impl_.name_.InitDefault();
-  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-    _impl_.name_.Set("", GetArenaForAllocation());
-  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (!from._internal_name().empty()) {
-    _this->_impl_.name_.Set(from._internal_name(), 
-      _this->GetArenaForAllocation());
-  }
-  // @@protoc_insertion_point(copy_constructor:loboscontrol.Name)
-}
-
-inline void Name::SharedCtor(
-    ::_pb::Arena* arena, bool is_message_owned) {
-  (void)arena;
-  (void)is_message_owned;
-  new (&_impl_) Impl_{
-      decltype(_impl_.name_){}
-    , /*decltype(_impl_._cached_size_)*/{}
-  };
-  _impl_.name_.InitDefault();
-  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-    _impl_.name_.Set("", GetArenaForAllocation());
-  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-}
-
-Name::~Name() {
-  // @@protoc_insertion_point(destructor:loboscontrol.Name)
-  if (auto *arena = _internal_metadata_.DeleteReturnArena<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>()) {
-  (void)arena;
-    return;
-  }
-  SharedDtor();
-}
-
-inline void Name::SharedDtor() {
-  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
-  _impl_.name_.Destroy();
-}
-
-void Name::SetCachedSize(int size) const {
-  _impl_._cached_size_.Set(size);
-}
-
-void Name::Clear() {
-// @@protoc_insertion_point(message_clear_start:loboscontrol.Name)
-  uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  _impl_.name_.ClearToEmpty();
-  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
-}
-
-const char* Name::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
-#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
-  while (!ctx->Done(&ptr)) {
-    uint32_t tag;
-    ptr = ::_pbi::ReadTag(ptr, &tag);
-    switch (tag >> 3) {
-      // string name = 1;
-      case 1:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
-          auto str = _internal_mutable_name();
-          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
-          CHK_(ptr);
-          CHK_(::_pbi::VerifyUTF8(str, "loboscontrol.Name.name"));
-        } else
-          goto handle_unusual;
-        continue;
-      default:
-        goto handle_unusual;
-    }  // switch
-  handle_unusual:
-    if ((tag == 0) || ((tag & 7) == 4)) {
-      CHK_(ptr);
-      ctx->SetLastTag(tag);
-      goto message_done;
-    }
-    ptr = UnknownFieldParse(
-        tag,
-        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
-        ptr, ctx);
-    CHK_(ptr != nullptr);
-  }  // while
-message_done:
-  return ptr;
-failure:
-  ptr = nullptr;
-  goto message_done;
-#undef CHK_
-}
-
-uint8_t* Name::_InternalSerialize(
-    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
-  // @@protoc_insertion_point(serialize_to_array_start:loboscontrol.Name)
-  uint32_t cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  // string name = 1;
-  if (!this->_internal_name().empty()) {
-    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
-      this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
-      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
-      "loboscontrol.Name.name");
-    target = stream->WriteStringMaybeAliased(
-        1, this->_internal_name(), target);
-  }
-
-  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
-        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
-  }
-  // @@protoc_insertion_point(serialize_to_array_end:loboscontrol.Name)
-  return target;
-}
-
-size_t Name::ByteSizeLong() const {
-// @@protoc_insertion_point(message_byte_size_start:loboscontrol.Name)
-  size_t total_size = 0;
-
-  uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  // string name = 1;
-  if (!this->_internal_name().empty()) {
-    total_size += 1 +
-      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
-        this->_internal_name());
-  }
-
-  return MaybeComputeUnknownFieldsSize(total_size, &_impl_._cached_size_);
-}
-
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData Name::_class_data_ = {
-    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSourceCheck,
-    Name::MergeImpl
-};
-const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*Name::GetClassData() const { return &_class_data_; }
-
-
-void Name::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg) {
-  auto* const _this = static_cast<Name*>(&to_msg);
-  auto& from = static_cast<const Name&>(from_msg);
-  // @@protoc_insertion_point(class_specific_merge_from_start:loboscontrol.Name)
-  GOOGLE_DCHECK_NE(&from, _this);
-  uint32_t cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  if (!from._internal_name().empty()) {
-    _this->_internal_set_name(from._internal_name());
-  }
-  _this->_internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
-}
-
-void Name::CopyFrom(const Name& from) {
-// @@protoc_insertion_point(class_specific_copy_from_start:loboscontrol.Name)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
-}
-
-bool Name::IsInitialized() const {
-  return true;
-}
-
-void Name::InternalSwap(Name* other) {
-  using std::swap;
-  auto* lhs_arena = GetArenaForAllocation();
-  auto* rhs_arena = other->GetArenaForAllocation();
-  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
-      &_impl_.name_, lhs_arena,
-      &other->_impl_.name_, rhs_arena
-  );
-}
-
-::PROTOBUF_NAMESPACE_ID::Metadata Name::GetMetadata() const {
   return ::_pbi::AssignDescriptors(
       &descriptor_table_loboscontrol_2eproto_getter, &descriptor_table_loboscontrol_2eproto_once,
       file_level_metadata_loboscontrol_2eproto[2]);
@@ -1322,6 +1358,10 @@ void UserReply::InternalSwap(UserReply* other) {
 // @@protoc_insertion_point(namespace_scope)
 }  // namespace loboscontrol
 PROTOBUF_NAMESPACE_OPEN
+template<> PROTOBUF_NOINLINE ::loboscontrol::RmUserParams*
+Arena::CreateMaybeMessage< ::loboscontrol::RmUserParams >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::loboscontrol::RmUserParams >(arena);
+}
 template<> PROTOBUF_NOINLINE ::loboscontrol::User*
 Arena::CreateMaybeMessage< ::loboscontrol::User >(Arena* arena) {
   return Arena::CreateMessageInternal< ::loboscontrol::User >(arena);
@@ -1329,10 +1369,6 @@ Arena::CreateMaybeMessage< ::loboscontrol::User >(Arena* arena) {
 template<> PROTOBUF_NOINLINE ::loboscontrol::Filters*
 Arena::CreateMaybeMessage< ::loboscontrol::Filters >(Arena* arena) {
   return Arena::CreateMessageInternal< ::loboscontrol::Filters >(arena);
-}
-template<> PROTOBUF_NOINLINE ::loboscontrol::Name*
-Arena::CreateMaybeMessage< ::loboscontrol::Name >(Arena* arena) {
-  return Arena::CreateMessageInternal< ::loboscontrol::Name >(arena);
 }
 template<> PROTOBUF_NOINLINE ::loboscontrol::ListAllUsersReply*
 Arena::CreateMaybeMessage< ::loboscontrol::ListAllUsersReply >(Arena* arena) {

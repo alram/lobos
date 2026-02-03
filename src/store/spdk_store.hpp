@@ -130,6 +130,9 @@ public:
     // Metadata
     int metadata_add_user(User u) override {};
     std::vector<User> metadata_list_users(std::string filter) override {};
+    bool metadata_remove_user(std::string& name) override {};
+    int metadata_add_key(User u) override {};
+    bool metadata_rm_key(std::string user, std::string key) override {};
 
     ~SpdkStore() {}
 

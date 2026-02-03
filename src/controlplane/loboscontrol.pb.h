@@ -30,6 +30,7 @@
 #include <google/protobuf/repeated_field.h>  // IWYU pragma: export
 #include <google/protobuf/extension_set.h>  // IWYU pragma: export
 #include <google/protobuf/unknown_field_set.h>
+#include <google/protobuf/wrappers.pb.h>
 // @@protoc_insertion_point(includes)
 #include <google/protobuf/port_def.inc>
 #define PROTOBUF_INTERNAL_EXPORT_loboscontrol_2eproto
@@ -51,9 +52,9 @@ extern FiltersDefaultTypeInternal _Filters_default_instance_;
 class ListAllUsersReply;
 struct ListAllUsersReplyDefaultTypeInternal;
 extern ListAllUsersReplyDefaultTypeInternal _ListAllUsersReply_default_instance_;
-class Name;
-struct NameDefaultTypeInternal;
-extern NameDefaultTypeInternal _Name_default_instance_;
+class RmUserParams;
+struct RmUserParamsDefaultTypeInternal;
+extern RmUserParamsDefaultTypeInternal _RmUserParams_default_instance_;
 class User;
 struct UserDefaultTypeInternal;
 extern UserDefaultTypeInternal _User_default_instance_;
@@ -64,13 +65,177 @@ extern UserReplyDefaultTypeInternal _UserReply_default_instance_;
 PROTOBUF_NAMESPACE_OPEN
 template<> ::loboscontrol::Filters* Arena::CreateMaybeMessage<::loboscontrol::Filters>(Arena*);
 template<> ::loboscontrol::ListAllUsersReply* Arena::CreateMaybeMessage<::loboscontrol::ListAllUsersReply>(Arena*);
-template<> ::loboscontrol::Name* Arena::CreateMaybeMessage<::loboscontrol::Name>(Arena*);
+template<> ::loboscontrol::RmUserParams* Arena::CreateMaybeMessage<::loboscontrol::RmUserParams>(Arena*);
 template<> ::loboscontrol::User* Arena::CreateMaybeMessage<::loboscontrol::User>(Arena*);
 template<> ::loboscontrol::UserReply* Arena::CreateMaybeMessage<::loboscontrol::UserReply>(Arena*);
 PROTOBUF_NAMESPACE_CLOSE
 namespace loboscontrol {
 
 // ===================================================================
+
+class RmUserParams final :
+    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:loboscontrol.RmUserParams) */ {
+ public:
+  inline RmUserParams() : RmUserParams(nullptr) {}
+  ~RmUserParams() override;
+  explicit PROTOBUF_CONSTEXPR RmUserParams(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  RmUserParams(const RmUserParams& from);
+  RmUserParams(RmUserParams&& from) noexcept
+    : RmUserParams() {
+    *this = ::std::move(from);
+  }
+
+  inline RmUserParams& operator=(const RmUserParams& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RmUserParams& operator=(RmUserParams&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const RmUserParams& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const RmUserParams* internal_default_instance() {
+    return reinterpret_cast<const RmUserParams*>(
+               &_RmUserParams_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    0;
+
+  friend void swap(RmUserParams& a, RmUserParams& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(RmUserParams* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RmUserParams* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RmUserParams* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<RmUserParams>(arena);
+  }
+  using ::PROTOBUF_NAMESPACE_ID::Message::CopyFrom;
+  void CopyFrom(const RmUserParams& from);
+  using ::PROTOBUF_NAMESPACE_ID::Message::MergeFrom;
+  void MergeFrom( const RmUserParams& from) {
+    RmUserParams::MergeImpl(*this, from);
+  }
+  private:
+  static void MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg);
+  public:
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const final;
+  void InternalSwap(RmUserParams* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "loboscontrol.RmUserParams";
+  }
+  protected:
+  explicit RmUserParams(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  static const ClassData _class_data_;
+  const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*GetClassData() const final;
+
+  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kNameFieldNumber = 1,
+    kForceFieldNumber = 2,
+  };
+  // string name = 1;
+  void clear_name();
+  const std::string& name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_name();
+  PROTOBUF_NODISCARD std::string* release_name();
+  void set_allocated_name(std::string* name);
+  private:
+  const std::string& _internal_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(const std::string& value);
+  std::string* _internal_mutable_name();
+  public:
+
+  // bool force = 2;
+  void clear_force();
+  bool force() const;
+  void set_force(bool value);
+  private:
+  bool _internal_force() const;
+  void _internal_set_force(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:loboscontrol.RmUserParams)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
+    bool force_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_loboscontrol_2eproto;
+};
+// -------------------------------------------------------------------
 
 class User final :
     public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:loboscontrol.User) */ {
@@ -120,7 +285,7 @@ class User final :
                &_User_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    0;
+    1;
 
   friend void swap(User& a, User& b) {
     a.Swap(&b);
@@ -321,7 +486,7 @@ class Filters final :
                &_Filters_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    1;
+    2;
 
   friend void swap(Filters& a, Filters& b) {
     a.Swap(&b);
@@ -419,159 +584,6 @@ class Filters final :
   typedef void DestructorSkippable_;
   struct Impl_ {
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr message_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_loboscontrol_2eproto;
-};
-// -------------------------------------------------------------------
-
-class Name final :
-    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:loboscontrol.Name) */ {
- public:
-  inline Name() : Name(nullptr) {}
-  ~Name() override;
-  explicit PROTOBUF_CONSTEXPR Name(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  Name(const Name& from);
-  Name(Name&& from) noexcept
-    : Name() {
-    *this = ::std::move(from);
-  }
-
-  inline Name& operator=(const Name& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline Name& operator=(Name&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
-    return GetDescriptor();
-  }
-  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  static const Name& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const Name* internal_default_instance() {
-    return reinterpret_cast<const Name*>(
-               &_Name_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    2;
-
-  friend void swap(Name& a, Name& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(Name* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(Name* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  Name* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<Name>(arena);
-  }
-  using ::PROTOBUF_NAMESPACE_ID::Message::CopyFrom;
-  void CopyFrom(const Name& from);
-  using ::PROTOBUF_NAMESPACE_ID::Message::MergeFrom;
-  void MergeFrom( const Name& from) {
-    Name::MergeImpl(*this, from);
-  }
-  private:
-  static void MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg);
-  public:
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const final;
-  void InternalSwap(Name* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "loboscontrol.Name";
-  }
-  protected:
-  explicit Name(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  static const ClassData _class_data_;
-  const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*GetClassData() const final;
-
-  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kNameFieldNumber = 1,
-  };
-  // string name = 1;
-  void clear_name();
-  const std::string& name() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_name(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_name();
-  PROTOBUF_NODISCARD std::string* release_name();
-  void set_allocated_name(std::string* name);
-  private:
-  const std::string& _internal_name() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(const std::string& value);
-  std::string* _internal_mutable_name();
-  public:
-
-  // @@protoc_insertion_point(class_scope:loboscontrol.Name)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -900,6 +912,80 @@ class UserReply final :
   #pragma GCC diagnostic push
   #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 #endif  // __GNUC__
+// RmUserParams
+
+// string name = 1;
+inline void RmUserParams::clear_name() {
+  _impl_.name_.ClearToEmpty();
+}
+inline const std::string& RmUserParams::name() const {
+  // @@protoc_insertion_point(field_get:loboscontrol.RmUserParams.name)
+  return _internal_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void RmUserParams::set_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:loboscontrol.RmUserParams.name)
+}
+inline std::string* RmUserParams::mutable_name() {
+  std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:loboscontrol.RmUserParams.name)
+  return _s;
+}
+inline const std::string& RmUserParams::_internal_name() const {
+  return _impl_.name_.Get();
+}
+inline void RmUserParams::_internal_set_name(const std::string& value) {
+  
+  _impl_.name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* RmUserParams::_internal_mutable_name() {
+  
+  return _impl_.name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* RmUserParams::release_name() {
+  // @@protoc_insertion_point(field_release:loboscontrol.RmUserParams.name)
+  return _impl_.name_.Release();
+}
+inline void RmUserParams::set_allocated_name(std::string* name) {
+  if (name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.name_.SetAllocated(name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:loboscontrol.RmUserParams.name)
+}
+
+// bool force = 2;
+inline void RmUserParams::clear_force() {
+  _impl_.force_ = false;
+}
+inline bool RmUserParams::_internal_force() const {
+  return _impl_.force_;
+}
+inline bool RmUserParams::force() const {
+  // @@protoc_insertion_point(field_get:loboscontrol.RmUserParams.force)
+  return _internal_force();
+}
+inline void RmUserParams::_internal_set_force(bool value) {
+  
+  _impl_.force_ = value;
+}
+inline void RmUserParams::set_force(bool value) {
+  _internal_set_force(value);
+  // @@protoc_insertion_point(field_set:loboscontrol.RmUserParams.force)
+}
+
+// -------------------------------------------------------------------
+
 // User
 
 // string name = 1;
@@ -1154,60 +1240,6 @@ inline void Filters::set_allocated_message(std::string* message) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:loboscontrol.Filters.message)
-}
-
-// -------------------------------------------------------------------
-
-// Name
-
-// string name = 1;
-inline void Name::clear_name() {
-  _impl_.name_.ClearToEmpty();
-}
-inline const std::string& Name::name() const {
-  // @@protoc_insertion_point(field_get:loboscontrol.Name.name)
-  return _internal_name();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void Name::set_name(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:loboscontrol.Name.name)
-}
-inline std::string* Name::mutable_name() {
-  std::string* _s = _internal_mutable_name();
-  // @@protoc_insertion_point(field_mutable:loboscontrol.Name.name)
-  return _s;
-}
-inline const std::string& Name::_internal_name() const {
-  return _impl_.name_.Get();
-}
-inline void Name::_internal_set_name(const std::string& value) {
-  
-  _impl_.name_.Set(value, GetArenaForAllocation());
-}
-inline std::string* Name::_internal_mutable_name() {
-  
-  return _impl_.name_.Mutable(GetArenaForAllocation());
-}
-inline std::string* Name::release_name() {
-  // @@protoc_insertion_point(field_release:loboscontrol.Name.name)
-  return _impl_.name_.Release();
-}
-inline void Name::set_allocated_name(std::string* name) {
-  if (name != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.name_.SetAllocated(name, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.name_.IsDefault()) {
-    _impl_.name_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:loboscontrol.Name.name)
 }
 
 // -------------------------------------------------------------------

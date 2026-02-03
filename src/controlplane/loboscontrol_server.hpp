@@ -17,11 +17,15 @@ public:
     : store_(store) 
     , s3_users_(s3_users) {};
 
-    std::optional<User> add_user(User u);
+    std::pair<grpc::StatusCode, std::optional<User>> add_user(User u);
     std::vector<User> list_all_users(std::string filter);
+    grpc::StatusCode rm_user(std::string name, bool force);
+    std::pair<grpc::StatusCode, std::optional<User>> add_key(User u);
+    grpc::StatusCode rm_key(std::string user, std::string key);
 private:
     Store& store_;
     std::unordered_map<std::string, std::string>& s3_users_;
+    std::unordered_map<std::string, std::vector<User>> users_;
 };
 
 class ControlPlaneServer {
@@ -42,6 +46,15 @@ public:
     grpc::Status ListAllUsers(grpc::ServerContext* ctx, 
                         const loboscontrol::Filters* filters, 
                         loboscontrol::ListAllUsersReply* reply) override;
+    grpc::Status RmUser(grpc::ServerContext* ctx, 
+                        const loboscontrol::RmUserParams* user,
+                        google::protobuf::BoolValue* reply) override;
+    grpc::Status AddKey(grpc::ServerContext* ctx,
+                        const loboscontrol::User *user,
+                        loboscontrol::UserReply* reply) override;
+    grpc::Status RmKey(grpc::ServerContext* ctx,
+                        const loboscontrol::User* user,
+                        google::protobuf::BoolValue* reply) override;
 private:
     ControlPlane* cp_;
 };

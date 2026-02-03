@@ -239,7 +239,54 @@ std::string FsStore::create_dest_dirs_if_not_exist(std::string object) {
 }
 
 int FsStore::metadata_add_user(User u) {
-    std::string key = lobos_user_prefix + "/" + u.name + "_" + u.key + "_" + u.secret + "_" + u.backend;
+    std::string key = lobos_user_prefix + "/" + u.name + "/";
+    create_dest_dirs_if_not_exist(key);
+    // We create keys automatically for every new user
+    auto ret = metadata_add_key(u);
+    return ret;
+}
+
+std::vector<User> FsStore::metadata_list_users(std::string filter) {
+    fs::path p = lobos_user_prefix + "/";
+    std::vector<User> users = {};
+
+    for (auto& user : boost::make_iterator_range(fs::directory_iterator(p))) {
+        User u;
+        u.name = user.path().string().substr(p.string().length());
+
+        for (auto& entry : boost::make_iterator_range(fs::directory_iterator(user))) {
+            std::string s = entry.path().string().substr(user.path().string().length() + 1);
+            auto pos = s.find('_');
+            if (pos == beast::string_view::npos)
+                break;
+            u.key = s.substr(0, pos);
+            s.erase(0, pos+1);
+            pos = s.find('_');
+            if (pos == beast::string_view::npos)
+                break;
+            u.secret = s.substr(0, pos);
+            s.erase(0, pos+1);
+            u.backend = s;
+            users.emplace_back(u);
+        }
+    }
+    return users;
+}
+
+bool FsStore::metadata_remove_user(std::string& name) {
+    const std::string dir = lobos_user_prefix + "/" + name;
+    boost::system::error_code ec;
+    fs::remove_all(dir, ec);
+
+    if (ec) {
+        std::cerr << "error deleting dir: " << ec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+int FsStore::metadata_add_key(User u) {
+    std::string key = lobos_user_prefix + "/" + u.name + "/" + u.key + "_" + u.secret + "_" + u.backend;
     int fd = open(key.c_str(), O_CREAT | O_RDONLY, 0600);
     if (fd < 0)
         return fd;
@@ -248,34 +295,17 @@ int FsStore::metadata_add_user(User u) {
     return 0;
 }
 
-std::vector<User> FsStore::metadata_list_users(std::string filter) {
-    fs::path p = lobos_user_prefix + "/";
-    std::vector<User> users = {};
-
+bool FsStore::metadata_rm_key(std::string user, std::string key) {
+    fs::path p = lobos_user_prefix + "/" + user + "/";
     for (auto& entry : boost::make_iterator_range(fs::directory_iterator(p))) {
-        std::string e = entry.path().string().substr(p.string().length());
-        auto pos = e.find('_');
-        if (pos == beast::string_view::npos)
-            break;
-        std::string name = e.substr(0, pos);
-        e.erase(0, pos+1);
-        pos = e.find('_');
-        if (pos == beast::string_view::npos)
-            break;
-        std::string key = e.substr(0, pos);
-        e.erase(0, pos+1);
-        pos = e.find('_');
-        if (pos == beast::string_view::npos)
-            break;
-        std::string secret = e.substr(0, pos);
-        e.erase(0, pos+1);
-        User u {
-            name,
-            key,
-            secret,
-            e
-        };
-        users.emplace_back(u);
+        std::string s = entry.path().string().substr(p.string().length()) + "_";
+        if (s.starts_with(key)) {
+            std::cout << "delete key: " << key << std::endl;
+            std::cout << "entry: " << entry.path() << std::endl;
+            auto r = fs::remove(entry);
+            if (r)
+                return r;
+        }
     }
-    return users;
+    return 0;
 }

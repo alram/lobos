@@ -53,13 +53,29 @@ class ControlPlane final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::ListAllUsersReply>> PrepareAsyncListAllUsers(::grpc::ClientContext* context, const ::loboscontrol::Filters& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::ListAllUsersReply>>(PrepareAsyncListAllUsersRaw(context, request, cq));
     }
-    // ListUser lists all user's infos
-    virtual ::grpc::Status ListUser(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::loboscontrol::UserReply* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>> AsyncListUser(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>>(AsyncListUserRaw(context, request, cq));
+    // RmUser removes an user
+    virtual ::grpc::Status RmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::google::protobuf::BoolValue* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::BoolValue>> AsyncRmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::BoolValue>>(AsyncRmUserRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>> PrepareAsyncListUser(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>>(PrepareAsyncListUserRaw(context, request, cq));
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::BoolValue>> PrepareAsyncRmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::BoolValue>>(PrepareAsyncRmUserRaw(context, request, cq));
+    }
+    // AddKey adds a key to specified user
+    virtual ::grpc::Status AddKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::loboscontrol::UserReply* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>> AsyncAddKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>>(AsyncAddKeyRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>> PrepareAsyncAddKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>>(PrepareAsyncAddKeyRaw(context, request, cq));
+    }
+    // RmKey removes a key from a specified user
+    virtual ::grpc::Status RmKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::google::protobuf::BoolValue* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::BoolValue>> AsyncRmKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::BoolValue>>(AsyncRmKeyRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::BoolValue>> PrepareAsyncRmKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::BoolValue>>(PrepareAsyncRmKeyRaw(context, request, cq));
     }
     class async_interface {
      public:
@@ -71,9 +87,15 @@ class ControlPlane final {
       // ListAllUsers returns a list of all S3 users
       virtual void ListAllUsers(::grpc::ClientContext* context, const ::loboscontrol::Filters* request, ::loboscontrol::ListAllUsersReply* response, std::function<void(::grpc::Status)>) = 0;
       virtual void ListAllUsers(::grpc::ClientContext* context, const ::loboscontrol::Filters* request, ::loboscontrol::ListAllUsersReply* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-      // ListUser lists all user's infos
-      virtual void ListUser(::grpc::ClientContext* context, const ::loboscontrol::Name* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void ListUser(::grpc::ClientContext* context, const ::loboscontrol::Name* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // RmUser removes an user
+      virtual void RmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams* request, ::google::protobuf::BoolValue* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void RmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams* request, ::google::protobuf::BoolValue* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // AddKey adds a key to specified user
+      virtual void AddKey(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void AddKey(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // RmKey removes a key from a specified user
+      virtual void RmKey(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::google::protobuf::BoolValue* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void RmKey(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::google::protobuf::BoolValue* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -83,8 +105,12 @@ class ControlPlane final {
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>* PrepareAsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::ListAllUsersReply>* AsyncListAllUsersRaw(::grpc::ClientContext* context, const ::loboscontrol::Filters& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::ListAllUsersReply>* PrepareAsyncListAllUsersRaw(::grpc::ClientContext* context, const ::loboscontrol::Filters& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>* AsyncListUserRaw(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>* PrepareAsyncListUserRaw(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::BoolValue>* AsyncRmUserRaw(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::BoolValue>* PrepareAsyncRmUserRaw(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>* AsyncAddKeyRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::loboscontrol::UserReply>* PrepareAsyncAddKeyRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::BoolValue>* AsyncRmKeyRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::BoolValue>* PrepareAsyncRmKeyRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
@@ -103,12 +129,26 @@ class ControlPlane final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::ListAllUsersReply>> PrepareAsyncListAllUsers(::grpc::ClientContext* context, const ::loboscontrol::Filters& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::ListAllUsersReply>>(PrepareAsyncListAllUsersRaw(context, request, cq));
     }
-    ::grpc::Status ListUser(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::loboscontrol::UserReply* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>> AsyncListUser(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>>(AsyncListUserRaw(context, request, cq));
+    ::grpc::Status RmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::google::protobuf::BoolValue* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>> AsyncRmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>>(AsyncRmUserRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>> PrepareAsyncListUser(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>>(PrepareAsyncListUserRaw(context, request, cq));
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>> PrepareAsyncRmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>>(PrepareAsyncRmUserRaw(context, request, cq));
+    }
+    ::grpc::Status AddKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::loboscontrol::UserReply* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>> AsyncAddKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>>(AsyncAddKeyRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>> PrepareAsyncAddKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>>(PrepareAsyncAddKeyRaw(context, request, cq));
+    }
+    ::grpc::Status RmKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::google::protobuf::BoolValue* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>> AsyncRmKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>>(AsyncRmKeyRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>> PrepareAsyncRmKey(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>>(PrepareAsyncRmKeyRaw(context, request, cq));
     }
     class async final :
       public StubInterface::async_interface {
@@ -117,8 +157,12 @@ class ControlPlane final {
       void AddUser(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) override;
       void ListAllUsers(::grpc::ClientContext* context, const ::loboscontrol::Filters* request, ::loboscontrol::ListAllUsersReply* response, std::function<void(::grpc::Status)>) override;
       void ListAllUsers(::grpc::ClientContext* context, const ::loboscontrol::Filters* request, ::loboscontrol::ListAllUsersReply* response, ::grpc::ClientUnaryReactor* reactor) override;
-      void ListUser(::grpc::ClientContext* context, const ::loboscontrol::Name* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)>) override;
-      void ListUser(::grpc::ClientContext* context, const ::loboscontrol::Name* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void RmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams* request, ::google::protobuf::BoolValue* response, std::function<void(::grpc::Status)>) override;
+      void RmUser(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams* request, ::google::protobuf::BoolValue* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void AddKey(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, std::function<void(::grpc::Status)>) override;
+      void AddKey(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void RmKey(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::google::protobuf::BoolValue* response, std::function<void(::grpc::Status)>) override;
+      void RmKey(::grpc::ClientContext* context, const ::loboscontrol::User* request, ::google::protobuf::BoolValue* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -134,11 +178,17 @@ class ControlPlane final {
     ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* PrepareAsyncAddUserRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::loboscontrol::ListAllUsersReply>* AsyncListAllUsersRaw(::grpc::ClientContext* context, const ::loboscontrol::Filters& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::loboscontrol::ListAllUsersReply>* PrepareAsyncListAllUsersRaw(::grpc::ClientContext* context, const ::loboscontrol::Filters& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* AsyncListUserRaw(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* PrepareAsyncListUserRaw(::grpc::ClientContext* context, const ::loboscontrol::Name& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>* AsyncRmUserRaw(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>* PrepareAsyncRmUserRaw(::grpc::ClientContext* context, const ::loboscontrol::RmUserParams& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* AsyncAddKeyRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::loboscontrol::UserReply>* PrepareAsyncAddKeyRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>* AsyncRmKeyRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::google::protobuf::BoolValue>* PrepareAsyncRmKeyRaw(::grpc::ClientContext* context, const ::loboscontrol::User& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_AddUser_;
     const ::grpc::internal::RpcMethod rpcmethod_ListAllUsers_;
-    const ::grpc::internal::RpcMethod rpcmethod_ListUser_;
+    const ::grpc::internal::RpcMethod rpcmethod_RmUser_;
+    const ::grpc::internal::RpcMethod rpcmethod_AddKey_;
+    const ::grpc::internal::RpcMethod rpcmethod_RmKey_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -151,8 +201,12 @@ class ControlPlane final {
     virtual ::grpc::Status AddUser(::grpc::ServerContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response);
     // ListAllUsers returns a list of all S3 users
     virtual ::grpc::Status ListAllUsers(::grpc::ServerContext* context, const ::loboscontrol::Filters* request, ::loboscontrol::ListAllUsersReply* response);
-    // ListUser lists all user's infos
-    virtual ::grpc::Status ListUser(::grpc::ServerContext* context, const ::loboscontrol::Name* request, ::loboscontrol::UserReply* response);
+    // RmUser removes an user
+    virtual ::grpc::Status RmUser(::grpc::ServerContext* context, const ::loboscontrol::RmUserParams* request, ::google::protobuf::BoolValue* response);
+    // AddKey adds a key to specified user
+    virtual ::grpc::Status AddKey(::grpc::ServerContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response);
+    // RmKey removes a key from a specified user
+    virtual ::grpc::Status RmKey(::grpc::ServerContext* context, const ::loboscontrol::User* request, ::google::protobuf::BoolValue* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_AddUser : public BaseClass {
@@ -195,26 +249,66 @@ class ControlPlane final {
     }
   };
   template <class BaseClass>
-  class WithAsyncMethod_ListUser : public BaseClass {
+  class WithAsyncMethod_RmUser : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithAsyncMethod_ListUser() {
+    WithAsyncMethod_RmUser() {
       ::grpc::Service::MarkMethodAsync(2);
     }
-    ~WithAsyncMethod_ListUser() override {
+    ~WithAsyncMethod_RmUser() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status ListUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::Name* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+    ::grpc::Status RmUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::RmUserParams* /*request*/, ::google::protobuf::BoolValue* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestListUser(::grpc::ServerContext* context, ::loboscontrol::Name* request, ::grpc::ServerAsyncResponseWriter< ::loboscontrol::UserReply>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestRmUser(::grpc::ServerContext* context, ::loboscontrol::RmUserParams* request, ::grpc::ServerAsyncResponseWriter< ::google::protobuf::BoolValue>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(2, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
-  typedef WithAsyncMethod_AddUser<WithAsyncMethod_ListAllUsers<WithAsyncMethod_ListUser<Service > > > AsyncService;
+  template <class BaseClass>
+  class WithAsyncMethod_AddKey : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_AddKey() {
+      ::grpc::Service::MarkMethodAsync(3);
+    }
+    ~WithAsyncMethod_AddKey() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AddKey(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestAddKey(::grpc::ServerContext* context, ::loboscontrol::User* request, ::grpc::ServerAsyncResponseWriter< ::loboscontrol::UserReply>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_RmKey : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_RmKey() {
+      ::grpc::Service::MarkMethodAsync(4);
+    }
+    ~WithAsyncMethod_RmKey() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RmKey(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::google::protobuf::BoolValue* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRmKey(::grpc::ServerContext* context, ::loboscontrol::User* request, ::grpc::ServerAsyncResponseWriter< ::google::protobuf::BoolValue>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_AddUser<WithAsyncMethod_ListAllUsers<WithAsyncMethod_RmUser<WithAsyncMethod_AddKey<WithAsyncMethod_RmKey<Service > > > > > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_AddUser : public BaseClass {
    private:
@@ -270,33 +364,87 @@ class ControlPlane final {
       ::grpc::CallbackServerContext* /*context*/, const ::loboscontrol::Filters* /*request*/, ::loboscontrol::ListAllUsersReply* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithCallbackMethod_ListUser : public BaseClass {
+  class WithCallbackMethod_RmUser : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithCallbackMethod_ListUser() {
+    WithCallbackMethod_RmUser() {
       ::grpc::Service::MarkMethodCallback(2,
-          new ::grpc::internal::CallbackUnaryHandler< ::loboscontrol::Name, ::loboscontrol::UserReply>(
+          new ::grpc::internal::CallbackUnaryHandler< ::loboscontrol::RmUserParams, ::google::protobuf::BoolValue>(
             [this](
-                   ::grpc::CallbackServerContext* context, const ::loboscontrol::Name* request, ::loboscontrol::UserReply* response) { return this->ListUser(context, request, response); }));}
-    void SetMessageAllocatorFor_ListUser(
-        ::grpc::MessageAllocator< ::loboscontrol::Name, ::loboscontrol::UserReply>* allocator) {
+                   ::grpc::CallbackServerContext* context, const ::loboscontrol::RmUserParams* request, ::google::protobuf::BoolValue* response) { return this->RmUser(context, request, response); }));}
+    void SetMessageAllocatorFor_RmUser(
+        ::grpc::MessageAllocator< ::loboscontrol::RmUserParams, ::google::protobuf::BoolValue>* allocator) {
       ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(2);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::loboscontrol::Name, ::loboscontrol::UserReply>*>(handler)
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::loboscontrol::RmUserParams, ::google::protobuf::BoolValue>*>(handler)
               ->SetMessageAllocator(allocator);
     }
-    ~WithCallbackMethod_ListUser() override {
+    ~WithCallbackMethod_RmUser() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status ListUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::Name* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+    ::grpc::Status RmUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::RmUserParams* /*request*/, ::google::protobuf::BoolValue* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    virtual ::grpc::ServerUnaryReactor* ListUser(
-      ::grpc::CallbackServerContext* /*context*/, const ::loboscontrol::Name* /*request*/, ::loboscontrol::UserReply* /*response*/)  { return nullptr; }
+    virtual ::grpc::ServerUnaryReactor* RmUser(
+      ::grpc::CallbackServerContext* /*context*/, const ::loboscontrol::RmUserParams* /*request*/, ::google::protobuf::BoolValue* /*response*/)  { return nullptr; }
   };
-  typedef WithCallbackMethod_AddUser<WithCallbackMethod_ListAllUsers<WithCallbackMethod_ListUser<Service > > > CallbackService;
+  template <class BaseClass>
+  class WithCallbackMethod_AddKey : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_AddKey() {
+      ::grpc::Service::MarkMethodCallback(3,
+          new ::grpc::internal::CallbackUnaryHandler< ::loboscontrol::User, ::loboscontrol::UserReply>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::loboscontrol::User* request, ::loboscontrol::UserReply* response) { return this->AddKey(context, request, response); }));}
+    void SetMessageAllocatorFor_AddKey(
+        ::grpc::MessageAllocator< ::loboscontrol::User, ::loboscontrol::UserReply>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(3);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::loboscontrol::User, ::loboscontrol::UserReply>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_AddKey() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AddKey(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* AddKey(
+      ::grpc::CallbackServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_RmKey : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_RmKey() {
+      ::grpc::Service::MarkMethodCallback(4,
+          new ::grpc::internal::CallbackUnaryHandler< ::loboscontrol::User, ::google::protobuf::BoolValue>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::loboscontrol::User* request, ::google::protobuf::BoolValue* response) { return this->RmKey(context, request, response); }));}
+    void SetMessageAllocatorFor_RmKey(
+        ::grpc::MessageAllocator< ::loboscontrol::User, ::google::protobuf::BoolValue>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(4);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::loboscontrol::User, ::google::protobuf::BoolValue>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_RmKey() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RmKey(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::google::protobuf::BoolValue* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* RmKey(
+      ::grpc::CallbackServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::google::protobuf::BoolValue* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_AddUser<WithCallbackMethod_ListAllUsers<WithCallbackMethod_RmUser<WithCallbackMethod_AddKey<WithCallbackMethod_RmKey<Service > > > > > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_AddUser : public BaseClass {
@@ -333,18 +481,52 @@ class ControlPlane final {
     }
   };
   template <class BaseClass>
-  class WithGenericMethod_ListUser : public BaseClass {
+  class WithGenericMethod_RmUser : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithGenericMethod_ListUser() {
+    WithGenericMethod_RmUser() {
       ::grpc::Service::MarkMethodGeneric(2);
     }
-    ~WithGenericMethod_ListUser() override {
+    ~WithGenericMethod_RmUser() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status ListUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::Name* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+    ::grpc::Status RmUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::RmUserParams* /*request*/, ::google::protobuf::BoolValue* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_AddKey : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_AddKey() {
+      ::grpc::Service::MarkMethodGeneric(3);
+    }
+    ~WithGenericMethod_AddKey() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AddKey(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_RmKey : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_RmKey() {
+      ::grpc::Service::MarkMethodGeneric(4);
+    }
+    ~WithGenericMethod_RmKey() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RmKey(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::google::protobuf::BoolValue* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -390,23 +572,63 @@ class ControlPlane final {
     }
   };
   template <class BaseClass>
-  class WithRawMethod_ListUser : public BaseClass {
+  class WithRawMethod_RmUser : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithRawMethod_ListUser() {
+    WithRawMethod_RmUser() {
       ::grpc::Service::MarkMethodRaw(2);
     }
-    ~WithRawMethod_ListUser() override {
+    ~WithRawMethod_RmUser() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status ListUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::Name* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+    ::grpc::Status RmUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::RmUserParams* /*request*/, ::google::protobuf::BoolValue* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestListUser(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestRmUser(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(2, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_AddKey : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_AddKey() {
+      ::grpc::Service::MarkMethodRaw(3);
+    }
+    ~WithRawMethod_AddKey() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AddKey(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestAddKey(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_RmKey : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_RmKey() {
+      ::grpc::Service::MarkMethodRaw(4);
+    }
+    ~WithRawMethod_RmKey() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RmKey(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::google::protobuf::BoolValue* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRmKey(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -454,25 +676,69 @@ class ControlPlane final {
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithRawCallbackMethod_ListUser : public BaseClass {
+  class WithRawCallbackMethod_RmUser : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithRawCallbackMethod_ListUser() {
+    WithRawCallbackMethod_RmUser() {
       ::grpc::Service::MarkMethodRawCallback(2,
           new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
             [this](
-                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->ListUser(context, request, response); }));
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->RmUser(context, request, response); }));
     }
-    ~WithRawCallbackMethod_ListUser() override {
+    ~WithRawCallbackMethod_RmUser() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status ListUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::Name* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+    ::grpc::Status RmUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::RmUserParams* /*request*/, ::google::protobuf::BoolValue* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    virtual ::grpc::ServerUnaryReactor* ListUser(
+    virtual ::grpc::ServerUnaryReactor* RmUser(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_AddKey : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_AddKey() {
+      ::grpc::Service::MarkMethodRawCallback(3,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->AddKey(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_AddKey() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AddKey(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* AddKey(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_RmKey : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_RmKey() {
+      ::grpc::Service::MarkMethodRawCallback(4,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->RmKey(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_RmKey() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RmKey(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::google::protobuf::BoolValue* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* RmKey(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
@@ -530,35 +796,89 @@ class ControlPlane final {
     virtual ::grpc::Status StreamedListAllUsers(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::loboscontrol::Filters,::loboscontrol::ListAllUsersReply>* server_unary_streamer) = 0;
   };
   template <class BaseClass>
-  class WithStreamedUnaryMethod_ListUser : public BaseClass {
+  class WithStreamedUnaryMethod_RmUser : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithStreamedUnaryMethod_ListUser() {
+    WithStreamedUnaryMethod_RmUser() {
       ::grpc::Service::MarkMethodStreamed(2,
         new ::grpc::internal::StreamedUnaryHandler<
-          ::loboscontrol::Name, ::loboscontrol::UserReply>(
+          ::loboscontrol::RmUserParams, ::google::protobuf::BoolValue>(
             [this](::grpc::ServerContext* context,
                    ::grpc::ServerUnaryStreamer<
-                     ::loboscontrol::Name, ::loboscontrol::UserReply>* streamer) {
-                       return this->StreamedListUser(context,
+                     ::loboscontrol::RmUserParams, ::google::protobuf::BoolValue>* streamer) {
+                       return this->StreamedRmUser(context,
                          streamer);
                   }));
     }
-    ~WithStreamedUnaryMethod_ListUser() override {
+    ~WithStreamedUnaryMethod_RmUser() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status ListUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::Name* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+    ::grpc::Status RmUser(::grpc::ServerContext* /*context*/, const ::loboscontrol::RmUserParams* /*request*/, ::google::protobuf::BoolValue* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedListUser(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::loboscontrol::Name,::loboscontrol::UserReply>* server_unary_streamer) = 0;
+    virtual ::grpc::Status StreamedRmUser(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::loboscontrol::RmUserParams,::google::protobuf::BoolValue>* server_unary_streamer) = 0;
   };
-  typedef WithStreamedUnaryMethod_AddUser<WithStreamedUnaryMethod_ListAllUsers<WithStreamedUnaryMethod_ListUser<Service > > > StreamedUnaryService;
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_AddKey : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_AddKey() {
+      ::grpc::Service::MarkMethodStreamed(3,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::loboscontrol::User, ::loboscontrol::UserReply>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::loboscontrol::User, ::loboscontrol::UserReply>* streamer) {
+                       return this->StreamedAddKey(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_AddKey() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status AddKey(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::loboscontrol::UserReply* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedAddKey(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::loboscontrol::User,::loboscontrol::UserReply>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_RmKey : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_RmKey() {
+      ::grpc::Service::MarkMethodStreamed(4,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::loboscontrol::User, ::google::protobuf::BoolValue>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::loboscontrol::User, ::google::protobuf::BoolValue>* streamer) {
+                       return this->StreamedRmKey(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_RmKey() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status RmKey(::grpc::ServerContext* /*context*/, const ::loboscontrol::User* /*request*/, ::google::protobuf::BoolValue* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedRmKey(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::loboscontrol::User,::google::protobuf::BoolValue>* server_unary_streamer) = 0;
+  };
+  typedef WithStreamedUnaryMethod_AddUser<WithStreamedUnaryMethod_ListAllUsers<WithStreamedUnaryMethod_RmUser<WithStreamedUnaryMethod_AddKey<WithStreamedUnaryMethod_RmKey<Service > > > > > StreamedUnaryService;
   typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_AddUser<WithStreamedUnaryMethod_ListAllUsers<WithStreamedUnaryMethod_ListUser<Service > > > StreamedService;
+  typedef WithStreamedUnaryMethod_AddUser<WithStreamedUnaryMethod_ListAllUsers<WithStreamedUnaryMethod_RmUser<WithStreamedUnaryMethod_AddKey<WithStreamedUnaryMethod_RmKey<Service > > > > > StreamedService;
 };
 
 }  // namespace loboscontrol

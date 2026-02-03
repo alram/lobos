@@ -1,8 +1,9 @@
 syntax = "proto3";
 
 package loboscontrol;
-
 option go_package = "lobos/controlplane";
+
+import "google/protobuf/wrappers.proto";
 
 // ControlPlan implements the control plane for Lobos
 service ControlPlane {
@@ -12,9 +13,17 @@ service ControlPlane {
     rpc AddUser (User) returns (UserReply) {}
     // ListAllUsers returns a list of all S3 users
     rpc ListAllUsers (Filters) returns (ListAllUsersReply) {}
-    // ListUser lists all user's infos
-    rpc ListUser(Name) returns (UserReply) {}
-    // Etc
+    // RmUser removes an user
+    rpc RmUser (RmUserParams) returns (google.protobuf.BoolValue) {}
+    // AddKey adds a key to specified user
+    rpc AddKey (User) returns (UserReply) {}
+    // RmKey removes a key from a specified user
+    rpc RmKey (User) returns (google.protobuf.BoolValue) {}
+}
+
+message RmUserParams {
+    string name = 1;
+    bool force = 2;
 }
 
 message User {
@@ -26,10 +35,6 @@ message User {
 
 message Filters {
     string message = 1;
-}
-
-message Name {
-    string name = 1;
 }
 
 message ListAllUsersReply {

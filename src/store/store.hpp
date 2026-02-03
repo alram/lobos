@@ -27,6 +27,9 @@ public:
     // Control plane stuff
     virtual int metadata_add_user(User u) = 0;
     virtual std::vector<User> metadata_list_users(std::string filter) = 0;
+    virtual bool metadata_remove_user(std::string& name) = 0;
+    virtual int metadata_add_key(User u) = 0;
+    virtual bool metadata_rm_key(std::string user, std::string key) = 0;
 protected:
     std::string lobos_state_prefix = ".__lobos__";
     std::string lobos_mpu_prefix = lobos_state_prefix + "mpu__";
