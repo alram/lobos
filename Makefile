@@ -1,7 +1,8 @@
 CXX = g++
 SPDK_ROOT = $(shell pwd)/src/spdk
 BOOST_DIR = src/boost_1_90_0
-PROTO_DIR= src/controlplane
+PROTO_DIR = src/controlplane
+PROTOGEN_DIR = $(PROTO_DIR)/protos
 
 # Boost
 BOOST_LIBS = -L$(BOOST_DIR)/stage/lib -lboost_program_options -lboost_filesystem -lboost_url
@@ -40,12 +41,11 @@ SRC = src/lobos.cpp src/s3http/server.cpp src/s3http/s3_op_handler.cpp \
 
 # Proto files
 PROTO_SRC = $(PROTO_DIR)/loboscontrol.proto
-PROTO_GEN = $(PROTO_DIR)/loboscontrol.pb.cc $(PROTO_DIR)/loboscontrol.grpc.pb.cc
-PROTO_HDR = $(PROTO_DIR)/loboscontrol.pb.h $(PROTO_DIR)/loboscontrol.grpc.pb.h
+PROTO_GEN = $(PROTOGEN_DIR)/loboscontrol.pb.cc $(PROTOGEN_DIR)/loboscontrol.grpc.pb.cc
+PROTO_HDR = $(PROTOGEN_DIR)/loboscontrol.pb.h $(PROTOGEN_DIR)/loboscontrol.grpc.pb.h
 
-# Control plane sources (add your server implementation)
+# Control plane sources
 CONTROL_SRC = $(PROTO_DIR)/loboscontrol_server.cc $(PROTO_GEN)
-CONTROL_HDR = $(PROTO_DIR)/loboscontrol_server.h
 
 OBJ = $(SRC:.cpp=.o)
 CONTROL_OBJ = $(CONTROL_SRC:.cc=.o)
@@ -55,7 +55,7 @@ TARGET = lobos
 all: $(TARGET)
 
 # Compile .cc files (for generated proto files)
-$(PROTO_DIR)/%.o: $(PROTO_DIR)/%.cc
+$(PROTOGEN_DIR)/%.o: $(PROTOGEN_DIR)/%.cc
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(TARGET): $(OBJ) $(CONTROL_OBJ)
@@ -78,7 +78,7 @@ $(TARGET): $(OBJ) $(CONTROL_OBJ)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 proto:
-	$(PROTOC) -I$(PROTO_DIR) --cpp_out=$(PROTO_DIR) --grpc_out=$(PROTO_DIR) --plugin=protoc-gen-grpc=$(GRPC_PLUGIN) $(PROTO_DIR)/loboscontrol.proto
+	$(PROTOC) -I$(PROTO_DIR) --cpp_out=$(PROTOGEN_DIR) --grpc_out=$(PROTOGEN_DIR) --plugin=protoc-gen-grpc=$(GRPC_PLUGIN) $(PROTO_DIR)/loboscontrol.proto
 
 clean:
 	rm -f $(OBJ) $(CONTROL_OBJ) $(TARGET) $(OBJ:.o=.d) $(CONTROL_OBJ:.o=.d)

@@ -300,8 +300,6 @@ bool FsStore::metadata_rm_key(std::string user, std::string key) {
     for (auto& entry : boost::make_iterator_range(fs::directory_iterator(p))) {
         std::string s = entry.path().string().substr(p.string().length()) + "_";
         if (s.starts_with(key)) {
-            std::cout << "delete key: " << key << std::endl;
-            std::cout << "entry: " << entry.path() << std::endl;
             auto r = fs::remove(entry);
             if (r)
                 return r;

@@ -4,8 +4,8 @@
 #include <string>
 #include <thread>
 
-#include "loboscontrol.pb.h"
-#include "loboscontrol.grpc.pb.h"
+#include "protos/loboscontrol.pb.h"
+#include "protos/loboscontrol.grpc.pb.h"
 #include <grpcpp/grpcpp.h>
 
 #include "../store/store.hpp"
