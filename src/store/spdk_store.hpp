@@ -128,11 +128,11 @@ public:
     asio::awaitable<int> do_abort_mpu(std::string upload_id, Multipart mp) override;
     void shutdown_store() override;
     // Metadata
-    int metadata_add_user(User u) override {};
-    std::vector<User> metadata_list_users(std::string filter) override {};
-    bool metadata_remove_user(std::string& name) override {};
-    int metadata_add_key(User u) override {};
-    bool metadata_rm_key(std::string user, std::string key) override {};
+    int metadata_add_user(User u) override;
+    std::vector<User> metadata_list_users(std::string filter) override;
+    bool metadata_remove_user(std::string& name) override;
+    int metadata_add_key(User u) override;
+    bool metadata_rm_key(std::string user, User u) override;
 
     ~SpdkStore() {}
 
@@ -143,6 +143,7 @@ private:
     spdk_io_channel* io_channel_ = nullptr;
     uint64_t io_unit_size_;
     std::unique_ptr<IndexStore> index_ = nullptr;
+    spdk_blob_id user_blob_id;
 
     BlobStoreConfig conf_;
     std::atomic<bool> index_ready = false;
@@ -172,6 +173,8 @@ private:
     static void iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno);
     static void get_blob_metadata(spdk_blob* blob, Object* o, const char*& key);
     void do_delete_async(spdk_blob_id blobid);
+    void create_or_load_state_objects();
+    bool metadata_remove_user_keys(std::string& name, std::string key);
 };
 
 struct BlobOpCtx {
@@ -182,4 +185,11 @@ struct BlobOpCtx {
     ~BlobOpCtx() {
         delete ioctx;
     }
+};
+
+struct UserOpCtx {
+    SpdkStore* store;
+    std::vector<User>* users;
+    spdk_blob* blob;
+    bool complete{false};
 };

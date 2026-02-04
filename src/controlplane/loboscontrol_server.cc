@@ -273,16 +273,18 @@ std::pair<grpc::StatusCode, std::optional<User>> ControlPlane::add_key(User u) {
 
 grpc::StatusCode ControlPlane::rm_key(std::string user, std::string key) {
     bool key_exists = false;
+    User u;
     for (const auto& it : users_[user]) {
         if (it.key == key) {
             key_exists = true;
+            u = it;
             break;
         }
     }
     if (!key_exists)
         return grpc::StatusCode::NOT_FOUND;
     
-    auto deleted = store_.metadata_rm_key(user, key);
+    auto deleted = store_.metadata_rm_key(user, u);
     if (!deleted)
         return grpc::StatusCode::INTERNAL;
 

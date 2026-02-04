@@ -295,15 +295,10 @@ int FsStore::metadata_add_key(User u) {
     return 0;
 }
 
-bool FsStore::metadata_rm_key(std::string user, std::string key) {
-    fs::path p = lobos_user_prefix + "/" + user + "/";
-    for (auto& entry : boost::make_iterator_range(fs::directory_iterator(p))) {
-        std::string s = entry.path().string().substr(p.string().length()) + "_";
-        if (s.starts_with(key)) {
-            auto r = fs::remove(entry);
-            if (r)
-                return r;
-        }
-    }
+bool FsStore::metadata_rm_key(std::string user, User u) {
+    fs::path p = lobos_user_prefix + "/" + user + "/" + u.key + "_" + u.secret + "_" + u.backend;
+    auto r = fs::remove(p);
+    if (r)
+        return r;
     return 0;
 }

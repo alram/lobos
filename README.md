@@ -62,12 +62,12 @@ Command Line Options:
 ## Usage
 
 Lobos require a configuration file. Check the commented `lobos.cfg` at the root of the repository for configuration options.
-Users management is imcomplete but if you enable authentication, you'll need to create S3 users. Lobos has a control plane using gRPC. A quick way to create a user is via the `grpcurl` command:
+If you enable authentication, you'll need to create S3 users. Lobos has a control plane using gRPC. A quick way to create a user is via the `grpcurl` command:
 ```
 $ grpcurl -plaintext -d '{"name": "alram"}' -proto src/controlplane/loboscontrol.proto localhost:50051 loboscontrol.ControlPlane/AddUser
 {
   "params": {
-    "name": "test",
+    "name": "alram",
     "key": "LB96D7QPTHK96NIM8UXU",
     "secret": "fLxTLUF9b8Kcwp1lbBghuCQ1CcPCx+u5njBWqt1d",
     "backend": "lobos"

@@ -65,7 +65,6 @@ public:
         // Start the control plane
         cp_ = std::make_unique<ControlPlane>(*store_, s3_users_);
         cp_server_.start(conf_.grpc_server, cp_.get());
-
         auto users = cp_->list_all_users("");
         for (const User& u : users) {
             s3_users_.insert(std::pair<std::string, std::string>(u.key, u.secret));

@@ -91,6 +91,56 @@ void SpdkStore::build_index_at_boot() {
     spdk_thread_send_msg(spdk_reactor_->get_thread(), blob_iterate, this);
 }
 
+void SpdkStore::create_or_load_state_objects() {
+    struct StateObjCtx {
+        SpdkStore* store;
+        spdk_blob* blob;
+        const char* xattr_name;
+        bool complete{false};
+    };
+
+    auto create_objs = [](void *args) {
+        auto ctx = static_cast<StateObjCtx*>(args);
+        spdk_bs_create_blob(ctx->store->bs_, [](void* cb_arg, spdk_blob_id blob_id, int bserrno) {
+            if (bserrno) { std::cerr << "couldn't create blob" << std::endl; }
+            auto ctx = static_cast<StateObjCtx*>(cb_arg);
+            ctx->store->user_blob_id = blob_id;
+            // we need to open and sync and close or the blob is not actually created
+            spdk_bs_open_blob(ctx->store->bs_, blob_id, [](void *cb_arg, spdk_blob *blob, int bserrno) {
+                auto ctx = static_cast<StateObjCtx*>(cb_arg);
+                ctx->blob = blob;
+                spdk_blob_set_xattr(blob, BLOB_META_KEY, ctx->xattr_name, strlen(ctx->xattr_name));
+                spdk_blob_sync_md(blob, [](void *cb_arg, int bserrno){
+                    auto ctx = static_cast<StateObjCtx*>(cb_arg);
+                    spdk_blob_close(ctx->blob, [](void *cb_arg, int bserrno) {
+                        auto ctx = static_cast<StateObjCtx*>(cb_arg);
+                        if (bserrno) { std::cerr << "couldn't close blob" << std::endl; }
+                        ctx->complete = true;
+                    }, ctx);
+                }, ctx);
+            }, ctx);
+        }, ctx); 
+    };
+
+    if (index_->index.contains(lobos_user_prefix)) {
+        std::cout << "found blob for user state" << std::endl;
+        user_blob_id = index_->index[lobos_user_prefix].blob_id;
+        index_->index.erase(lobos_user_prefix);
+
+        return;
+    }
+
+
+    auto ctx = new StateObjCtx{this, nullptr, lobos_user_prefix.c_str()};
+    spdk_thread_send_msg(spdk_reactor_->get_thread(), create_objs, ctx);
+
+    // todo harden
+    while (!ctx->complete) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    delete(ctx);
+}
+
 void SpdkStore::init_store(std::string devSpec) {
     std::unique_ptr<BlobStoreInitializer> dev;
     if (devSpec == "malloc") {
@@ -141,6 +191,10 @@ void SpdkStore::init_store(std::string devSpec) {
     while (!index_ready) {
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
+
+    // We create or load the state objects
+    // state objects are used to store, users, buckets, etc.
+    create_or_load_state_objects();
 }
 
 asio::awaitable<void> SpdkStore::do_list(std::string_view prefix, session_buffer& buffer) {
@@ -529,4 +583,157 @@ void SpdkStore::get_blob_metadata(spdk_blob* blob, Object* o, const char*& key) 
     if (rc == 0) {
         key = static_cast<const char*>(xattr_v);
     }
+}
+
+int SpdkStore::metadata_add_user(User u) {
+    // We have one global blob for all users
+    // and each key is an xattrs, meh arch
+    // will need to think this through until
+    // after there's a persistent index for 
+    // spdk
+
+    auto add_user = [](void* args) {
+        auto ctx = static_cast<UserOpCtx*>(args);
+        spdk_bs_open_blob(ctx->store->bs_, ctx->store->user_blob_id, [](void *cb_arg, spdk_blob *blob, int bserrno) {
+            if (bserrno) { std::cerr << "couldn't open blob" << std::endl; }
+            auto ctx = static_cast<UserOpCtx*>(cb_arg);
+            std::string key = (*ctx->users)[0].name + "_" + (*ctx->users)[0].key + "_" + (*ctx->users)[0].secret + "_" + (*ctx->users)[0].backend;
+            auto rc = spdk_blob_set_xattr(blob, key.c_str(), nullptr, 0);
+            ctx->blob = blob;
+            spdk_blob_sync_md(blob, [](void *cb_arg, int bserrno) {
+                if(bserrno) { std::cerr << "couldn't sync md" << std::endl; }
+                auto ctx = static_cast<UserOpCtx*>(cb_arg);
+                spdk_blob_close(ctx->blob, [](void *cb_arg, int bserrno) {
+                    auto ctx = static_cast<UserOpCtx*>(cb_arg);
+                    if (bserrno) { std::cerr << "couldn't close blob" << std::endl; }
+                    ctx->complete = true;
+                }, ctx);
+            }, ctx);
+        }, ctx);
+    };
+
+    std::vector<User> users = {u};
+    auto ctx = new UserOpCtx{this, &users, nullptr, false};
+    spdk_thread_send_msg(spdk_reactor_->get_thread(), add_user, ctx);
+
+    // TODO harden 
+    while (!ctx->complete) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    } 
+
+    delete(ctx);
+    return 0;
+}
+
+int SpdkStore::metadata_add_key(User u) {
+    // for spdk its the same shtuff as add user
+    // sicne everything is on one obj
+    return metadata_add_user(u);
+}
+
+std::vector<User> SpdkStore::metadata_list_users(std::string filter) {
+    std::vector<User> users = {};
+
+    auto load_users = [](void *args) {
+        auto ctx = static_cast<UserOpCtx*>(args);
+        spdk_bs_open_blob(ctx->store->bs_, ctx->store->user_blob_id, [](void *cb_arg, spdk_blob *blob, int bserrno) {
+            if (bserrno) { std::cerr << "couldn't open blob in spdk: " << bserrno << std::endl; }
+            auto ctx = static_cast<UserOpCtx*>(cb_arg);
+            // load all users into the struct and close the blob
+            spdk_xattr_names* users = nullptr;
+            auto rc = spdk_blob_get_xattr_names(blob, &users);
+            if (rc != 0) {
+                std::cerr << "error retrieving xattrs for users state object" << std::endl;
+            } else {
+                size_t count = spdk_xattr_names_get_count(users);
+                for (size_t i = 0; i < count; i++) {
+                    // we get name of the xattr which is going to be
+                    // user_key_secret_backend
+                    std::string xattr = spdk_xattr_names_get_name(users, i);
+                    if (xattr == BLOB_META_KEY)
+                        continue;
+                    User u;
+                    std::istringstream ss(xattr);
+                    std::getline(ss, u.name, '_');
+                    std::getline(ss, u.key, '_');
+                    std::getline(ss, u.secret, '_');
+                    std::getline(ss, u.backend);
+                    
+                    ctx->users->emplace_back(u);
+                }
+            }
+            spdk_blob_close(blob, [](void *cb_arg, int bserrno) {
+                auto ctx = static_cast<UserOpCtx*>(cb_arg);
+                if (bserrno) { std::cerr << "couldn't close blob" << std::endl; }
+                ctx->complete = true;
+            }, ctx);
+        }, ctx);
+    };
+
+    auto ctx = new UserOpCtx{this, &users, nullptr, false};
+    spdk_thread_send_msg(spdk_reactor_->get_thread(), load_users, ctx);
+
+    // TODO harden then we could loop foreva on issue
+    while (!ctx->complete) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    delete(ctx);
+    return users;
+}
+
+bool SpdkStore::metadata_remove_user(std::string& name) {
+    return metadata_remove_user_keys(name, "");
+}
+
+bool SpdkStore::metadata_rm_key(std::string user, User u) {
+    std::string key = user + "_" + u.key + "_" + u.secret + "_" + u.backend;
+    return metadata_remove_user_keys(user, key);
+}
+
+bool SpdkStore::metadata_remove_user_keys(std::string& name, std::string key) {
+    struct OpCtx {
+        SpdkStore* store;
+        std::vector<std::string> keys;
+        bool complete{false};
+    };
+    
+    auto remove_user = [](void* args) {
+        auto ctx = static_cast<OpCtx*>(args);
+        spdk_bs_open_blob(ctx->store->bs_, ctx->store->user_blob_id, [](void *cb_arg, spdk_blob *blob, int bserrno) {
+            auto ctx = static_cast<OpCtx*>(cb_arg);
+            if (bserrno) { std::cerr << "error opening blob" << std::endl; }
+            for (const auto& k : ctx->keys) {
+                spdk_blob_remove_xattr(blob, k.c_str());
+            }
+            spdk_blob_close(blob, [](void *cb_arg, int bserrno) {
+                auto ctx = static_cast<OpCtx*>(cb_arg);
+                if (bserrno) { std::cerr << "couldn't close blob" << std::endl; }
+                ctx->complete = true;
+            }, ctx);
+        }, ctx);
+    };
+
+    std::vector<std::string> keys;
+    if (key.empty()) {
+        auto users = metadata_list_users("");
+        for (const auto& u : users) {
+            if (u.name == name) 
+                keys.emplace_back(u.name + "_" + u.key + "_" + u.secret + "_" + u.backend);
+        }
+    } else {
+        keys.emplace_back(key);
+    }
+
+
+    auto ctx = new OpCtx{this, keys, false};
+    spdk_thread_send_msg(spdk_reactor_->get_thread(), remove_user, ctx);
+
+    // TODO harden then we could loop foreva on issue
+    while (!ctx->complete) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    delete(ctx);
+    return true;
 }

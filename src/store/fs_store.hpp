@@ -33,7 +33,7 @@ public:
     std::vector<User> metadata_list_users(std::string filter) override;
     bool metadata_remove_user(std::string& name) override;
     int metadata_add_key(User u) override;
-    bool metadata_rm_key(std::string user, std::string key) override;
+    bool metadata_rm_key(std::string user, User u) override;
 
 private:
     static std::string create_dest_dirs_if_not_exist(std::string object);
