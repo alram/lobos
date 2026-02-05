@@ -166,6 +166,38 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_post() {
 }
 
 asio::awaitable<http::message_generator> S3OpHandler::handle_delete() {
+
+    if (is_bucket_op_) {
+        int r = co_await store_.delete_bucket(req_[lobos::s3::bucket]);
+        if (r == ENOTEMPTY) {
+            http::response<http::string_body> res{http::status::conflict, req_.version()};
+            res.set(http::field::server, lobos::http::server_name);
+            res.keep_alive(false);
+            res.body() =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                "<Error>"
+                "<Code>BucketNotEmpty</Code>"
+                "<Message>The bucket you tried to delete is not empty</Message>"
+                "<BucketName>"+ std::string(req_[lobos::s3::bucket]) +"</BucketName>"
+                "<RequestId>XXXXXXXXXXXX</RequestId>"
+                "<HostId>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</HostId>"
+                "</Error>";
+            res.prepare_payload();
+            co_return res;
+        }
+        else if (r != 0) {
+            co_return internal_error_res();
+        } else {
+            buckets_.erase(req_[lobos::s3::bucket]);
+
+            http::response<http::string_body> res{http::status::no_content, req_.version()};
+            res.set(http::field::server, lobos::http::server_name);
+            res.keep_alive(req_.keep_alive());
+            res.prepare_payload();
+            co_return res;
+        }
+    }
+
     if (query_params_.contains("uploadId")) {
         auto upload_id = query_params_["uploadId"];
         if (!active_mpus_.contains(upload_id))
@@ -236,7 +268,7 @@ asio::awaitable<http::message_generator> S3OpHandler::ok_list_all_buckets() {
     for (const auto& b : buckets_) {
         s += 
         "<Bucket>"
-        "<BucketRegion>lobos</BucketRegion>"
+        "<BucketRegion>lobos1</BucketRegion>"
         "<CreationDate>" + to_rfc1123(b.second.created_at) + "</CreationDate>"
         "<Name>" + b.first + "</Name>"
         "</Bucket>";

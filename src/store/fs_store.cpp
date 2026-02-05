@@ -101,6 +101,14 @@ asio::awaitable<Bucket> FsStore::create_bucket(std::string_view bucket) {
     co_return b;
 };
 
+asio::awaitable<int> FsStore::delete_bucket(std::string_view bucket) {
+    boost::system::error_code ec;
+    fs::remove(bucket, ec);
+    if (ec)
+        co_return ec.value();
+    co_return 0;
+};
+
 std::unordered_map<std::string, Bucket> FsStore::load_buckets() {
     std::unordered_map<std::string, Bucket> buckets;
     for (auto& entry : boost::make_iterator_range(fs::directory_iterator("."))) {

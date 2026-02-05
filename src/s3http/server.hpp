@@ -65,6 +65,7 @@ public:
 
         // Load all buckets
         buckets_ = store_->load_buckets();
+
     }
     ~S3HttpServer() {
         cp_server_.stop();

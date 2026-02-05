@@ -25,7 +25,7 @@ public:
     void shutdown_store() override {};
     // Buckets
     asio::awaitable<Bucket> create_bucket(std::string_view bucket) override;
-    asio::awaitable<int> delete_bucket(std::string_view bucket) override {};
+    asio::awaitable<int> delete_bucket(std::string_view bucket) override;
     std::unordered_map<std::string, Bucket> load_buckets() override;
     // MPU
     asio::awaitable<int> do_create_mpu(std::string_view o, std::string uploadId) override;

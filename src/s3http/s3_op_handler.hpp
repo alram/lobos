@@ -29,7 +29,9 @@ public:
             co_return no_such_bucket_res();
         if (key_.empty())
             is_bucket_op_ = true;
-        key_ = buckets_[req_[lobos::s3::bucket]].prefix + key_;
+        if (!req_[lobos::s3::bucket].empty())
+            key_ = buckets_[req_[lobos::s3::bucket]].prefix + key_;
+
         switch (req_.method()) {
             case http::verb::head:    co_return co_await handle_head();
             case http::verb::get:      co_return co_await handle_get();
