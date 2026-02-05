@@ -42,10 +42,7 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_get() {
         co_return co_await ok_list_all_buckets();
     }
 
-    if (key_.empty()) {
-        // removed aws_params.contains.empty() on 
-        // purpose since now it should be handled by
-        // bucket detect
+    if (key_.substr(0, key_.length()-1) == req_[lobos::s3::bucket]) {
         if (query_params_.contains("versioning") || 
             query_params_.contains("object-lock") || 
             query_params_.contains("max-buckets") ||
@@ -67,6 +64,26 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_get() {
 }
 
 asio::awaitable<http::message_generator> S3OpHandler::handle_put() {
+    if (req_[lobos::s3::bucket].empty())
+        co_return bad_request_res("InvalidRequest", "No bucket specified");
+
+    // this is a bucket create
+    // We don't supprot anything that can
+    // be in a body yet so just create it and return
+    if (key_.empty()) {
+        auto b = co_await store_.create_bucket(req_[lobos::s3::bucket]);
+        if (b.prefix.empty())
+            co_return internal_error_res();
+        buckets_.insert(std::pair<std::string, Bucket>(req_[lobos::s3::bucket], b));
+        
+        http::response<http::string_body> res{http::status::ok, req_.version()};
+        res.set(http::field::server, lobos::http::server_name);
+        res.keep_alive(req_.keep_alive());
+        res.prepare_payload();
+        co_return res;
+    }
+
+    // put object (and mpu)
     bool is_mpu = false;
     if (query_params_.contains("partNumber") || query_params_.contains("uploadId")) {
         is_mpu = true;
@@ -213,17 +230,22 @@ asio::awaitable<http::message_generator> S3OpHandler::ok_list_all_buckets() {
     res.set(http::field::server, lobos::http::server_name);
     res.set(http::field::content_type, "application/xml");
     res.keep_alive(req_.keep_alive());
-    res.body() = 
+    std::string s = 
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-        "<ListAllMyBucketsResult><Buckets>"
+        "<ListAllMyBucketsResult><Buckets>";
+    for (const auto& b : buckets_) {
+        s += 
         "<Bucket>"
         "<BucketRegion>lobos</BucketRegion>"
-        "<CreationDate>1970-01-01T00:00:00+00:00</CreationDate>"
-        "<Name>TODO for loop here when all buckets are impl</Name>"
-        "</Bucket>"
+        "<CreationDate>" + to_rfc1123(b.second.created_at) + "</CreationDate>"
+        "<Name>" + b.first + "</Name>"
+        "</Bucket>";
+    }
+    s +=
         "</Buckets>"
         "<Owner><ID>lobos</ID></Owner>"
         "</ListAllMyBucketsResult>";
+    res.body() = s;
 
     res.prepare_payload();
     co_return res;
@@ -231,7 +253,6 @@ asio::awaitable<http::message_generator> S3OpHandler::ok_list_all_buckets() {
 
 asio::awaitable<http::message_generator> S3OpHandler::ok_list_objects() {
     beast::string_view prefix = query_params_["prefix"];
-
     // idk man 1k feels like plenty ¯\_(ツ)_/¯ TODO
     buffer_->reserve(1024);
     std::string h = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -240,7 +261,7 @@ asio::awaitable<http::message_generator> S3OpHandler::ok_list_objects() {
         "<Prefix>" + std::string(prefix) + "</Prefix>"
         "<MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated>";
     buffer_->append(h);
-    co_await store_.do_list(prefix, *buffer_);
+    co_await store_.do_list(key_, prefix, *buffer_);
     std::string f = "<Marker></Marker></ListBucketResult>";
     buffer_->append(f);
     
@@ -409,6 +430,20 @@ http::message_generator S3OpHandler::internal_error_res() {
     http::response<http::string_body> res{http::status::service_unavailable, req_.version()};
     res.set(http::field::server, lobos::http::server_name);
     res.keep_alive(req_.keep_alive());
+    res.prepare_payload();
+    return res;
+}
+
+http::message_generator S3OpHandler::no_such_bucket_res() {
+    http::response<http::string_body> res{http::status::not_found, req_.version()};
+    res.set(http::field::server, lobos::http::server_name);
+    res.keep_alive(false);
+    res.body() = 
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<Error><Code>NoSuchBucket</Code>"
+        "<Message>The specified bucket does not exist</Message>"
+        "<Resource>"+ std::string(req_[lobos::s3::bucket]) +"/</Resource>"
+        "<RequestId>not available</RequestId></Error>";
     res.prepare_payload();
     return res;
 }

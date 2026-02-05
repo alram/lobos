@@ -16,9 +16,13 @@ public:
     virtual asio::awaitable<int> do_write(std::string o, session_buffer& buffer) = 0;
     virtual asio::awaitable<int> do_read(std::string o, uint64_t offset, session_buffer& buffer) = 0;
     virtual asio::awaitable<bool> do_delete(std::string_view o) = 0;
-    virtual asio::awaitable<void> do_list(std::string_view prefix, session_buffer& buffer) = 0;
+    virtual asio::awaitable<void> do_list(std::string& bucket, std::string_view prefix, session_buffer& buffer) = 0;
     virtual asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string_view o) = 0;
     virtual void shutdown_store() = 0;
+    // Bucket ops
+    virtual asio::awaitable<Bucket> create_bucket(std::string_view bucket) = 0;
+    virtual asio::awaitable<int> delete_bucket(std::string_view bucket) = 0;
+    virtual std::unordered_map<std::string, Bucket> load_buckets() = 0;
     // MPU stuff
     virtual asio::awaitable<int> do_create_mpu(std::string_view o, std::string upload_id) = 0;
     virtual std::unordered_map<std::string, Multipart> get_active_mpus() = 0;
@@ -32,6 +36,7 @@ public:
     virtual bool metadata_rm_key(std::string user, User u) = 0;
 protected:
     std::string lobos_state_prefix = ".__lobos__";
+    std::string lobos_bucket_prefix = lobos_state_prefix + "bucket__";
     std::string lobos_mpu_prefix = lobos_state_prefix + "mpu__";
     std::string lobos_user_prefix = lobos_state_prefix + "user__";
 };

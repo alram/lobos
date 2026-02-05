@@ -35,6 +35,7 @@ namespace lobos::http {
 struct serverConfig {
     std::string address;
     short unsigned int port;
+    std::string domain;
     bool auth_enabled;
     std::string grpc_server;
     bool use_spdk = false;
@@ -43,7 +44,6 @@ struct serverConfig {
 class S3HttpServer {
 public:
     explicit S3HttpServer(
-        std::string dir,
         Store* store,
         serverConfig c
     )
@@ -52,13 +52,6 @@ public:
     {
         auto const addr = asio::ip::make_address(conf_.address);
         endpoint = {addr, conf_.port};
-
-        // Bucket name is the last dir passed
-        // or lobos in non-fs mode
-        if (dir.back() == '/')
-            dir.pop_back();
-        auto const pos = dir.rfind("/");
-        bucket_name = dir.substr(pos + 1);
 
         active_mpus_ = store_->get_active_mpus();
 
@@ -69,6 +62,9 @@ public:
         for (const User& u : users) {
             s3_users_.insert(std::pair<std::string, std::string>(u.key, u.secret));
         }
+
+        // Load all buckets
+        buckets_ = store_->load_buckets();
     }
     ~S3HttpServer() {
         cp_server_.stop();
@@ -90,7 +86,6 @@ private:
     std::vector<std::thread> thread_pool_;
     std::unique_ptr<asio::signal_set> signals_;
     asio::ip::tcp::endpoint endpoint;
-    std::string bucket_name;
 
     asio::awaitable<void> do_listen(asio::ip::tcp::endpoint ep);
     asio::awaitable<void> do_session(beast::tcp_stream stream);
@@ -98,13 +93,14 @@ private:
         http::request<http::buffer_body>&& req, 
         std::shared_ptr<session_buffer> session_buffer);
 
-    void sanitize_target_path(std::string& target);
+    void sanitize_target_path(beast::string_view& target, beast::string_view bucket, bool is_path_style);
     bool parse_query_params(std::string_view t, std::unordered_map<std::string, std::string>& query_params);
 
     asio::awaitable<bool> auth_request(const http::request<http::buffer_body>& req);
 
     std::unordered_map<std::string, std::string> s3_users_;
     std::unordered_map<std::string, Multipart> active_mpus_;
+    std::unordered_map<std::string, Bucket> buckets_;
 
     http::message_generator forbidden_res(http::request<http::buffer_body>&& req) {
         http::response<http::string_body> res{http::status::forbidden, req.version()};

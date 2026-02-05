@@ -197,7 +197,7 @@ void SpdkStore::init_store(std::string devSpec) {
     create_or_load_state_objects();
 }
 
-asio::awaitable<void> SpdkStore::do_list(std::string_view prefix, session_buffer& buffer) {
+asio::awaitable<void> SpdkStore::do_list(std::string& bucket, std::string_view prefix, session_buffer& buffer) {
     // this logic should really be in the index
     auto it = index_->index.lower_bound(prefix);
     std::string pre;

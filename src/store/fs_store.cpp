@@ -51,35 +51,24 @@ asio::awaitable<bool> FsStore::do_delete(std::string_view o) {
     co_return deleted;
 }
 
-asio::awaitable<void> FsStore::do_list(std::string_view prefix, session_buffer& buffer) {
-    std::string pref_s(prefix);
-    fs::path path = pref_s;
-    if (!fs::exists(path)) {
-        auto pos = path.string().find('/');
-        if (pos == beast::string_view::npos) {
-            path.clear();
-        }
-        else {
-            path = prefix.substr(0, pos);
-            prefix = prefix.substr(pos+1);
-        }
-    } else {
-        pref_s.clear();
-    }
-
-    if (path.empty())
-        path = fs::current_path();
+asio::awaitable<void> FsStore::do_list(std::string& bucket, std::string_view prefix, session_buffer& buffer) {
+    std::string full_path = bucket + std::string(prefix);
+    // In the prefix, we want the last /
+    // which will indicate our actual path
+    // then we'll use what's right of the path as
+    // an actual prefix
+    auto pos = full_path.find_last_of('/');
+    fs::path path = full_path.substr(0, pos);
+    std::string pre = full_path.substr(pos+1);
 
     for (auto& entry : boost::make_iterator_range(fs::directory_iterator(path), {})) {
         if (entry.path().string().find(lobos_state_prefix) != beast::string_view::npos)
             continue;
 
-        if (!pref_s.empty()) {
-            auto s = path.string() + '/' + pref_s;
-            if (!entry.path().string().starts_with(s)) {
-                continue;
-            }
-        }
+        std::string_view sv = path.string() + "/" + pre;
+        if (!entry.path().string().starts_with(sv))
+            continue;
+
         std::string s;
         if (fs::is_directory(entry.path())) {
             s =  "<CommonPrefixes>"
@@ -97,6 +86,35 @@ asio::awaitable<void> FsStore::do_list(std::string_view prefix, session_buffer& 
     }
     co_return;
 };
+
+// FsStore buckets are pretty straightforward, just top level directories
+// in the lobos directory
+asio::awaitable<Bucket> FsStore::create_bucket(std::string_view bucket) {
+    Bucket b;
+
+    auto created = fs::create_directory(bucket);
+    if (!created)
+        co_return b;
+    b.prefix = std::string(bucket) + "/";
+    b.created_at = std::time(nullptr);
+
+    co_return b;
+};
+
+std::unordered_map<std::string, Bucket> FsStore::load_buckets() {
+    std::unordered_map<std::string, Bucket> buckets;
+    for (auto& entry : boost::make_iterator_range(fs::directory_iterator("."))) {
+        std::string_view path = entry.path().string();
+        path.remove_prefix(2); //get rid of ./
+        if (path.starts_with(lobos_state_prefix))
+            continue;
+        Bucket b;
+        b.prefix = std::string(path) + "/";
+        b.created_at = fs::last_write_time(entry);
+        buckets.insert(std::pair<std::string, Bucket>(path, b));
+    }
+    return buckets;
+}
 
 asio::awaitable<std::tuple<size_t, time_t>> FsStore::do_metadata_req(std::string_view o) {
     size_t size;

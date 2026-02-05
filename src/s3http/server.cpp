@@ -167,25 +167,46 @@ bool S3HttpServer::parse_query_params(std::string_view t, std::unordered_map<std
     }
     return true;
 }
-
-void S3HttpServer::sanitize_target_path(std::string& target) {
-    if (target.starts_with("/" + bucket_name))
-        target.erase(0, bucket_name.size() + 1); // removes `/bucketname`
-
-    // the query params are stored
-    // into aws_params by now so we just strip 'em
+void S3HttpServer::sanitize_target_path(beast::string_view& target, beast::string_view bucket, bool is_path_style) {
+    // remove /bucketname if we're in path style only
+    if (is_path_style && target.size() > 0 
+        && target[0] == '/' && target.substr(1).starts_with(bucket)) {
+        target.remove_prefix(bucket.length() + 1);
+    }
+    // The query params are stored already so we just wipe
+    // 'em away
     auto pos = target.find('?');
     if (pos != beast::string_view::npos) {
-        target.erase(pos);
+        target.remove_suffix(target.length() - pos);
     }
 
-    // We have a /something, erase the /
-    if (target.front() == PATH_DELIM)
-        target.erase(0, 1);
+    if (target[0] == '/')
+        target.remove_prefix(1);
 }
 
 asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::request<http::buffer_body>&& req, 
     std::shared_ptr<session_buffer> session_buffer) {
+
+    //Figure out bucket name
+    beast::string_view bucket_name;
+    bool is_path_style = true;
+
+    if (!conf_.domain.empty()) {
+        std::string_view host = req[http::field::host];
+        auto pos = host.find(conf_.domain);
+        if (pos != beast::string_view::npos) {
+            is_path_style = false;
+            bucket_name = host.substr(0, pos-1);
+        }
+    } else {
+        // If we're on path style, then bucket is the first contained /
+        auto pos = req.target().find('/', 1); //we offset by one
+        if (pos == beast::string_view::npos)
+            pos = req.target().find('?');
+        bucket_name = req.target().substr(1, pos-1);
+    }
+    // we insert the bucket name in our header
+    req.insert(lobos::s3::bucket, bucket_name);
 
     //Store query params
     std::unordered_map<std::string, std::string> query_params;
@@ -201,17 +222,16 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
         }
     }
 
-    std::string target{req.target()};
-    sanitize_target_path(target);
-
-    req.insert(lobos::s3::bucket, bucket_name);
+    beast::string_view target{req.target()};
+    sanitize_target_path(target, bucket_name, is_path_style);
 
     auto op = S3OpHandler(*store_, 
         std::move(req),
         std::move(session_buffer),
         std::move(target),
         std::move(query_params),
-        active_mpus_
+        active_mpus_,
+        buckets_
     );
 
     co_return co_await op.handle();
@@ -240,8 +260,6 @@ asio::awaitable<void> S3HttpServer::do_session(beast::tcp_stream stream) {
         }
 
         if (parser.get().method() == http::verb::put || parser.get().method() == http::verb::post) {
-            std::string target = parser.get().target();
-            sanitize_target_path(target);
             auto content_length = parser.content_length().value_or(0);
             session_buffer->resize(content_length);
 
@@ -300,7 +318,7 @@ asio::awaitable<void> S3HttpServer::do_listen(asio::ip::tcp::endpoint ep) {
 }
 
 void S3HttpServer::start(int threads, std::vector<int> pins) {
-    std::cout << "Starting S3 HTTP server for bucket " << bucket_name << " at " << endpoint << std::endl;
+    std::cout << "Starting S3 HTTP server at " << endpoint << std::endl;
     
     ioctxs_.reserve(threads);
 

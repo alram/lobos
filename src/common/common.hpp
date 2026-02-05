@@ -44,3 +44,10 @@ struct User {
     std::string secret;
     std::string backend;
 };
+
+// for now but we'll wanna keep stats
+// per bucket
+struct Bucket {
+    std::string prefix;
+    time_t created_at;
+};

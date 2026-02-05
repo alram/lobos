@@ -13,16 +13,22 @@ public:
               std::shared_ptr<session_buffer> buffer,
               std::string key,
               std::unordered_map<std::string, std::string> query_params,
-              std::unordered_map<std::string, Multipart>& active_mpus)
+              std::unordered_map<std::string, Multipart>& active_mpus,
+              std::unordered_map<std::string, Bucket>& buckets)
         : store_(store)
         , req_(std::move(req))
         , buffer_(std::move(buffer))
         , key_(std::move(key))
         , query_params_(std::move(query_params))
         , active_mpus_(active_mpus)
+        , buckets_(buckets)
     {}
 
     asio::awaitable<http::message_generator> handle() {
+        if (!req_[lobos::s3::bucket].empty() && !buckets_.contains(req_[lobos::s3::bucket]))
+            co_return no_such_bucket_res();
+
+        key_ = buckets_[req_[lobos::s3::bucket]].prefix + key_;
         switch (req_.method()) {
             case http::verb::head:    co_return co_await handle_head();
             case http::verb::get:      co_return co_await handle_get();
@@ -40,6 +46,7 @@ private:
     std::string key_;
     std::unordered_map<std::string, std::string> query_params_;
     std::unordered_map<std::string, Multipart>& active_mpus_;
+    std::unordered_map<std::string, Bucket>& buckets_;
 
     // Verb handling func
     asio::awaitable<http::message_generator> handle_head();
@@ -61,4 +68,5 @@ private:
     http::message_generator bad_request_res(std::string code, std::string msg);
     http::message_generator key_not_found_res();
     http::message_generator internal_error_res();
+    http::message_generator no_such_bucket_res();
 };

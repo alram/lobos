@@ -97,6 +97,7 @@ int main(int argc, char **argv) {
             ("lobos.http_threads", po::value<int>()->default_value(8))
             ("lobos.http_threads_cores", po::value<std::string>()->default_value(""))
             ("lobos.grpc_server", po::value<std::string>()->default_value("127.0.0.1:50051"))
+            ("lobos.domain_name", po::value<std::string>()->default_value(""))
             ("lobos.s3_auth_enabled", po::value<bool>()->default_value(true))
             ("filesystem.directory", po::value<std::string>()->default_value(""))
             ("spdk_blobstore.device", po::value<std::string>()->default_value(""))
@@ -140,6 +141,7 @@ int main(int argc, char **argv) {
     serverConfig conf = {
         vm["lobos.listen_ip"].as<std::string>(),
         vm["lobos.port"].as<short unsigned int>(),
+        vm["lobos.domain_name"].as<std::string>(),
         vm["lobos.s3_auth_enabled"].as<bool>(),
         vm["lobos.grpc_server"].as<std::string>(),
     };
@@ -149,12 +151,10 @@ int main(int argc, char **argv) {
 
     std::unique_ptr<Store> store;
     std::unique_ptr<SpdkReactor> spdk_reactor;
-    std::string bucket = "";
 
     std::string backend = vm["lobos.backend"].as<std::string>();
     if (backend == "spdk_blobstore") {
         conf.use_spdk = true;
-        bucket = "lobos";
         SpdkReactorConf conf = {
             vm["spdk_blobstore.log_level"].as<std::string>(),
             vm["spdk_blobstore.interrupt_mode"].as<bool>(),
@@ -174,10 +174,10 @@ int main(int argc, char **argv) {
 
     } else if (backend == "filesystem") {
         std::cout << "starting in fs mode" << std::endl;
-        bucket = vm["filesystem.directory"].as<std::string>();
-        validate_lobos_dir(bucket);
+        auto dir = vm["filesystem.directory"].as<std::string>();
+        validate_lobos_dir(dir);
         // Change CWD to lobos_dir
-        std::filesystem::current_path(bucket);
+        std::filesystem::current_path(dir);
         // We're in FS mode
         store = std::make_unique<FsStore>();
         store->init_store("");
@@ -186,7 +186,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    S3HttpServer server(bucket, store.get(), conf);
+    S3HttpServer server(store.get(), conf);
 
     int http_threads = vm["lobos.http_threads"].as<int>();
     std::string pins_s = vm["lobos.http_threads_cores"].as<std::string>();
