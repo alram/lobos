@@ -7,6 +7,7 @@
 #include <spdk/blob.h>
 
 struct Object {
+    std::string key;
     size_t size;
     time_t last_modified;
     spdk_blob_id blob_id;

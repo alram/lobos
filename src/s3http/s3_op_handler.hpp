@@ -25,12 +25,16 @@ public:
     {}
 
     asio::awaitable<http::message_generator> handle() {
-        if (!req_[lobos::s3::bucket].empty() && !buckets_.contains(req_[lobos::s3::bucket]))
+        // Only options is a create bucket
+        if (!req_[lobos::s3::bucket].empty() && !buckets_.contains(req_[lobos::s3::bucket]) && req_.method() != http::verb::put)
             co_return no_such_bucket_res();
+
         if (key_.empty())
             is_bucket_op_ = true;
-        if (!req_[lobos::s3::bucket].empty())
+
+        if (!req_[lobos::s3::bucket].empty() && buckets_.contains(req_[lobos::s3::bucket])) {
             key_ = buckets_[req_[lobos::s3::bucket]].prefix + key_;
+        }
 
         switch (req_.method()) {
             case http::verb::head:    co_return co_await handle_head();

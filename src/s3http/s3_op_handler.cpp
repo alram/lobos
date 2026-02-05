@@ -74,14 +74,18 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_put() {
         auto b = co_await store_.create_bucket(req_[lobos::s3::bucket]);
         if (b.prefix.empty())
             co_return internal_error_res();
-        buckets_.insert(std::pair<std::string, Bucket>(req_[lobos::s3::bucket], b));
         
+        buckets_.insert(std::pair<std::string, Bucket>(req_[lobos::s3::bucket], b));
+
         http::response<http::string_body> res{http::status::ok, req_.version()};
         res.set(http::field::server, lobos::http::server_name);
         res.keep_alive(req_.keep_alive());
         res.prepare_payload();
         co_return res;
     }
+
+    if (!buckets_.contains(req_[lobos::s3::bucket]))
+        co_return no_such_bucket_res();
 
     // put object (and mpu)
     bool is_mpu = false;

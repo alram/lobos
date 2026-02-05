@@ -56,12 +56,20 @@ void SpdkStore::iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno) {
     Object o = {};
     const char *key = nullptr;
     o.blob_id = spdk_blob_get_id(blb);
-    
     get_blob_metadata(blb, &o, key);
+
+    std::string key_s = key;
+    auto pos = key_s.find('/');
+    bool skip = false;
+    if (pos != std::string::npos) {
+        o.key = key_s.substr(pos+1);
+    } else {
+        o.key = key_s;
+    }
+
 
     // It's possible we may have orphans due to async deletion failures
     // so we try to handle it.
-    bool skip = false;
     auto it = ctx->index_->index.find(key);
     if (it != ctx->index_->index.end()) {
         if (it->second.last_modified < o.last_modified) {
@@ -76,7 +84,7 @@ void SpdkStore::iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno) {
     if (!skip) {
         ctx->index_->add_entry(key, o);
         std::cout << "index builder - added index entry: " << key 
-                << " size: " << o.size << std::endl;
+                << " key: " << o.blob_id << std::endl;
     }
     spdk_bs_iter_next(ctx->bs_, blb, iter_cb, ctx);
 }
@@ -91,7 +99,7 @@ void SpdkStore::build_index_at_boot() {
     spdk_thread_send_msg(spdk_reactor_->get_thread(), blob_iterate, this);
 }
 
-void SpdkStore::create_or_load_state_objects() {
+void SpdkStore::create_or_load_state_objects(std::string lobos_prefix) {
     struct StateObjCtx {
         SpdkStore* store;
         spdk_blob* blob;
@@ -104,7 +112,12 @@ void SpdkStore::create_or_load_state_objects() {
         spdk_bs_create_blob(ctx->store->bs_, [](void* cb_arg, spdk_blob_id blob_id, int bserrno) {
             if (bserrno) { std::cerr << "couldn't create blob" << std::endl; }
             auto ctx = static_cast<StateObjCtx*>(cb_arg);
-            ctx->store->user_blob_id = blob_id;
+            if (ctx->xattr_name == ctx->store->lobos_user_prefix) {
+                ctx->store->user_blob_id_ = blob_id;
+            }
+            if (ctx->xattr_name == ctx->store->lobos_bucket_prefix) {
+                ctx->store->bucket_blob_id_ = blob_id;
+            }
             // we need to open and sync and close or the blob is not actually created
             spdk_bs_open_blob(ctx->store->bs_, blob_id, [](void *cb_arg, spdk_blob *blob, int bserrno) {
                 auto ctx = static_cast<StateObjCtx*>(cb_arg);
@@ -122,23 +135,28 @@ void SpdkStore::create_or_load_state_objects() {
         }, ctx); 
     };
 
-    if (index_->index.contains(lobos_user_prefix)) {
-        std::cout << "found blob for user state" << std::endl;
-        user_blob_id = index_->index[lobos_user_prefix].blob_id;
-        index_->index.erase(lobos_user_prefix);
-
-        return;
+    bool create = true;
+    if (index_->index.contains(lobos_prefix)) {
+        spdk_blob_id blob_id = index_->index[lobos_prefix].blob_id;
+        if (lobos_prefix == lobos_user_prefix) {
+            user_blob_id_ = blob_id;
+        } else if (lobos_prefix == lobos_bucket_prefix) {
+            bucket_blob_id_ = blob_id;
+        }
+        index_->index.erase(lobos_prefix);
+        create = false;
     }
 
-
-    auto ctx = new StateObjCtx{this, nullptr, lobos_user_prefix.c_str()};
-    spdk_thread_send_msg(spdk_reactor_->get_thread(), create_objs, ctx);
-
-    // todo harden
-    while (!ctx->complete) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    if (create) {
+        auto ctx = new StateObjCtx{this, nullptr, lobos_prefix.c_str()};
+        spdk_thread_send_msg(spdk_reactor_->get_thread(), create_objs, ctx);
+        // todo harden
+        while (!ctx->complete) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        delete(ctx);
     }
-    delete(ctx);
+
 }
 
 void SpdkStore::init_store(std::string devSpec) {
@@ -194,29 +212,27 @@ void SpdkStore::init_store(std::string devSpec) {
 
     // We create or load the state objects
     // state objects are used to store, users, buckets, etc.
-    create_or_load_state_objects();
+    create_or_load_state_objects(lobos_user_prefix);
+    create_or_load_state_objects(lobos_bucket_prefix);
 }
 
 asio::awaitable<void> SpdkStore::do_list(std::string& bucket, std::string_view prefix, session_buffer& buffer) {
     // this logic should really be in the index
-    auto it = index_->index.lower_bound(prefix);
+    std::string prefix_n = bucket + std::string(prefix);
+    auto it = index_->index.lower_bound(prefix_n);
     std::string pre;
-
     for(; it != index_->index.end(); it++) {
-        if (!it->first.starts_with(prefix)) break;
-        if (it->first.starts_with(lobos_state_prefix)) continue;
+        if (!it->first.starts_with(prefix_n)) break;
+
         std::string s;
         // if the element contains `/` its a dir so we just display the common prefix thing
         auto key_comp = it->first;
-        key_comp.erase(0, prefix.length());
+        key_comp.erase(0, prefix_n.length());
         auto pos = key_comp.find('/');
         if (pos != std::string::npos) {
             // there's a catch where if you do `dir/` you lsit the dir
             // but if you do `dir` you list the pre. so if pre starts with `/`
             // we know we need to previous dir
-            if (key_comp.starts_with('/')) {
-                //todo
-            }
 
             if (pre == key_comp.substr(0, pos+1)) continue;
 
@@ -234,6 +250,89 @@ asio::awaitable<void> SpdkStore::do_list(std::string& bucket, std::string_view p
         buffer.append(s);
     }
     co_return;
+}
+
+asio::awaitable<Bucket> SpdkStore::create_bucket(std::string_view bucket) {
+    Bucket b = {
+        std::string(bucket) + "/",
+        std::time(nullptr),
+    };
+    std::unordered_map<std::string, Bucket> buckets;
+    buckets.insert(std::pair<std::string, Bucket>(std::string(bucket), b));
+
+    co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, &buckets](auto complete_cb) {
+        auto ctx = new BucketOpCtx{this, &buckets, nullptr, std::move(complete_cb)};
+        spdk_bs_open_blob(bs_, bucket_blob_id_, [](void *cb_arg, spdk_blob *blob, int bserrno) {
+            auto ctx = static_cast<BucketOpCtx*>(cb_arg);
+            if (bserrno) { std::cerr << "couldn't open bucket blob: " << bserrno << std::endl; }
+            ctx->blob = blob;
+            for (const auto& [name, v] : *ctx->buckets) {
+                std::string key = name + "_" + std::to_string(v.created_at);
+                spdk_blob_set_xattr(blob, key.c_str(), nullptr, 0);
+            }
+            spdk_blob_sync_md(blob, [](void *cb_arg, int bserrno) {
+                if(bserrno) { std::cerr << "couldn't sync md" << std::endl; }
+                auto ctx = static_cast<BucketOpCtx*>(cb_arg);
+                spdk_blob_close(ctx->blob, [](void *cb_arg, int bserrno) {
+                    auto ctx = static_cast<BucketOpCtx*>(cb_arg);
+                    if (bserrno) { std::cerr << "couldn't close blob" << std::endl; }
+                    ctx->complete_cb(0);
+                    delete(ctx);
+                }, ctx);
+            }, ctx);
+        }, ctx);
+    });
+
+    co_return b;
+}
+
+std::unordered_map<std::string, Bucket> SpdkStore::load_buckets() {
+    std::unordered_map<std::string, Bucket> buckets;
+
+    auto load_buckets = [](void *args) {
+        auto ctx = static_cast<BucketOpCtx*>(args);
+        spdk_bs_open_blob(ctx->store->bs_, ctx->store->bucket_blob_id_, [](void *cb_arg, spdk_blob *blob, int bserrno) {
+            if (bserrno) { std::cerr << "couldn't open blob in spdk: " << bserrno << std::endl; }
+            auto ctx = static_cast<BucketOpCtx*>(cb_arg);
+            // load all users into the struct and close the blob
+            spdk_xattr_names* buckets = nullptr;
+            auto rc = spdk_blob_get_xattr_names(blob, &buckets);
+            if (rc != 0) {
+                std::cerr << "error retrieving xattrs for users state object" << std::endl;
+            } else {
+                size_t count = spdk_xattr_names_get_count(buckets);
+                for (size_t i = 0; i < count; i++) {
+                    std::string xattr = spdk_xattr_names_get_name(buckets, i);
+                    if (xattr == BLOB_META_KEY)
+                        continue;
+                    Bucket b;
+                    std::istringstream ss(xattr);
+                    std::string name;
+                    std::getline(ss, name, '_');
+                    std::string create_time_s;
+                    std::getline(ss, create_time_s, '_');
+                    b.prefix = name + "/";
+                    b.created_at = std::stoll(create_time_s);
+                    ctx->buckets->insert(std::pair<std::string, Bucket>(name, b));
+                }
+            }
+            spdk_blob_close(blob, [](void *cb_arg, int bserrno) {
+                auto ctx = static_cast<BucketOpCtx*>(cb_arg);
+                if (bserrno) { std::cerr << "couldn't close blob" << std::endl; }
+                ctx->complete = true;
+            }, ctx);
+        }, ctx);
+    };
+
+    auto ctx = new BucketOpCtx{this, &buckets, nullptr, nullptr, false};
+    spdk_thread_send_msg(spdk_reactor_->get_thread(), load_buckets, ctx);
+    // TODO harden then we could loop foreva on issue
+    while (!ctx->complete) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    delete(ctx);
+
+    return buckets;
 }
 
 asio::awaitable<int> SpdkStore::create_and_size_blob(IoCtx* ioctx) {
@@ -313,7 +412,10 @@ asio::awaitable<int> SpdkStore::write_data(IoCtx* ioctx) {
                     if (bserrno)
                         std::cerr << "non-fatal error closing blob: " << bserrno << std::endl;
                     // Add entry to index - TODO index stuff is suepr hacky
+                    auto pos = ctx->ioctx->key.find('/');
+                    auto key_n = ctx->ioctx->key.substr(pos+1);
                     ctx->store->index_->add_entry(ctx->ioctx->key, {
+                        key_n,
                         ctx->ioctx->md->size,
                         ctx->ioctx->md->last_modified,
                         ctx->ioctx->blob_id,
@@ -332,7 +434,6 @@ asio::awaitable<int> SpdkStore::do_write(std::string o, session_buffer& buffer) 
     ioctx->md = std::make_unique<BlobMetadata>();
     ioctx->md->size = ioctx->buffer->size();
     ioctx->md->last_modified = std::time(nullptr);
-
     spdk_blob_id old_blob_id = 0;
     
     auto it = index_->index.find(std::string(o));
@@ -594,7 +695,7 @@ int SpdkStore::metadata_add_user(User u) {
 
     auto add_user = [](void* args) {
         auto ctx = static_cast<UserOpCtx*>(args);
-        spdk_bs_open_blob(ctx->store->bs_, ctx->store->user_blob_id, [](void *cb_arg, spdk_blob *blob, int bserrno) {
+        spdk_bs_open_blob(ctx->store->bs_, ctx->store->user_blob_id_, [](void *cb_arg, spdk_blob *blob, int bserrno) {
             if (bserrno) { std::cerr << "couldn't open blob" << std::endl; }
             auto ctx = static_cast<UserOpCtx*>(cb_arg);
             std::string key = (*ctx->users)[0].name + "_" + (*ctx->users)[0].key + "_" + (*ctx->users)[0].secret + "_" + (*ctx->users)[0].backend;
@@ -636,7 +737,7 @@ std::vector<User> SpdkStore::metadata_list_users(std::string filter) {
 
     auto load_users = [](void *args) {
         auto ctx = static_cast<UserOpCtx*>(args);
-        spdk_bs_open_blob(ctx->store->bs_, ctx->store->user_blob_id, [](void *cb_arg, spdk_blob *blob, int bserrno) {
+        spdk_bs_open_blob(ctx->store->bs_, ctx->store->user_blob_id_, [](void *cb_arg, spdk_blob *blob, int bserrno) {
             if (bserrno) { std::cerr << "couldn't open blob in spdk: " << bserrno << std::endl; }
             auto ctx = static_cast<UserOpCtx*>(cb_arg);
             // load all users into the struct and close the blob
@@ -700,7 +801,7 @@ bool SpdkStore::metadata_remove_user_keys(std::string& name, std::string key) {
     
     auto remove_user = [](void* args) {
         auto ctx = static_cast<OpCtx*>(args);
-        spdk_bs_open_blob(ctx->store->bs_, ctx->store->user_blob_id, [](void *cb_arg, spdk_blob *blob, int bserrno) {
+        spdk_bs_open_blob(ctx->store->bs_, ctx->store->user_blob_id_, [](void *cb_arg, spdk_blob *blob, int bserrno) {
             auto ctx = static_cast<OpCtx*>(cb_arg);
             if (bserrno) { std::cerr << "error opening blob" << std::endl; }
             for (const auto& k : ctx->keys) {

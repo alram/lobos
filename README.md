@@ -4,8 +4,8 @@
 
 Lobos (local objectstore) allows a user to quickly deploy a local object store. Lobos can bind to `127.0.0.1` with noauth or any local IP when auth is enabled (see lobos.cfg in the repo for more info).
 Lobos supports 2 backends, a filesystem and SPDK's blobstore:
- - Filesystem: When in filesystem mode, Lobos will translate S3 calls into filesystems'. The directory Lobos is pointed out will become the bucket name. For instance, if you point Lobos at `/mnt/disk0` your bucket name will be `disk0`.
- - SPDK's blobstore: Lobos bucket name will always `lobos`. See the SPDK documentation below for configuration information.
+ - Filesystem
+ - SPDK's blobstore
 
 The parsing is pretty naive so things can get broken quick but the following seem to work with `aws s3` cli:
  - ListBuckets
@@ -13,10 +13,11 @@ The parsing is pretty naive so things can get broken quick but the following see
  - ListObjectsV2 (no max-keys)
  - HeadObject
  - GetObject (including Range request)
- - PutObject (including MPU)
+ - PutObject (MPU Broken since multi-bucket support - fix in progress)
  - DeleteObject
-
- Benchmark tools `elbencho` and `warp` work as well (but checksums aren't supported)
+ - CreateBucket
+ - ListBuckets
+ - DeleteBucket
 
  SPDK support is still very experimental and while the whole project has a lot of shortcuts that needs to be addressed, SPDK has a lot more.
 
@@ -30,7 +31,6 @@ Next area of work in no particular order:
     - Object tagging
     - Object Copy
     - ... probably more
- - Control plane (in progress)
 
 ## Building
 
@@ -79,33 +79,23 @@ A Go CLI for lobos is also available at https://github.com/alram/lobos-cli
 ### Launching in filesystem:
 
 ```bash
-$ mkdir /mnt/demo
-$ ./lobos -c lobos.cfg 
+$ ./lobos -c lobos.cfg        
 starting in fs mode
-Starting S3 HTTP server for bucket demo at 127.0.0.1:8080
-```
+loading all users
+loading all buckets
+Starting S3 HTTP server at 127.0.0.1:8080
+Control plane listening on 127.0.0.1:50051
 
-Using the `aws` cli:
 
-```bash
-$ aws --endpoint-url http://127.0.0.1:8080 s3 ls
-1969-12-31 16:00:00 demo
-$ aws --endpoint-url http://127.0.0.1:8080 s3 ls s3://demo
-                           PRE .vscode/
-                           PRE src/
-                           PRE testdir/
-2026-01-02 18:04:05         30 .gitignore
-2025-12-30 13:26:00        448 Makefile
-2026-01-03 16:07:13    3010968 lobos
-2026-01-03 15:46:37      30100 out
-$ aws --endpoint-url http://127.0.0.1:8080 s3 ls s3://demo/src/
-                           PRE boost_1_90_0/
-                           PRE index/
-                           PRE s3http/
-2025-12-10 08:10:21  170662122 boost_1_90_0.tar.bz2
-2025-12-03 05:46:36        291 boost_1_90_0
-2026-01-03 16:07:09       4525 lobos.cpp
-2026-01-03 16:07:13     342480 lobos.o
+$ aws --endpoint http://localhost:8080 s3 mb s3://lobosdemo
+make_bucket: lobosdemo
+$ aws --endpoint http://localhost:8080 s3 ls               
+2026-02-05 13:22:41 lobosdemo
+$ aws --endpoint http://localhost:8080 s3 cp Makefile s3://lobosdemo/file1
+upload: ./Makefile to s3://lobosdemo/file1                    
+$ aws --endpoint http://localhost:8080 s3 ls s3://lobosdemo               
+2026-02-05 13:23:21       2876 file1
+
 ```
 
 ### Launching in SPDK mode
@@ -154,7 +144,8 @@ didn't find existing blobstore, creating one
 alloc done! io unit size: 4096
 attempting to rebuild index if exist
 index build complete
-Starting S3 HTTP server for bucket lobos at 127.0.0.1:8080
+Starting S3 HTTP server at 127.0.0.1:8080
+Control plane listening on 127.0.0.1:50051
 ```
 Since SPDK pass through the device, classic methods of monitoring are out of the window. When in SPDK mode, a prometheus collector will be started and accessible at `http://127.0.0.1:9091`
 

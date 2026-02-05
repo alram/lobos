@@ -122,9 +122,9 @@ public:
     asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string_view o) override;
     asio::awaitable<void> do_list(std::string& bucket, std::string_view prefix, session_buffer& buffer) override;
     // Buckets
-    asio::awaitable<Bucket> create_bucket(std::string_view bucket) override {};
+    asio::awaitable<Bucket> create_bucket(std::string_view bucket) override;
     asio::awaitable<int> delete_bucket(std::string_view bucket) override {};
-    std::unordered_map<std::string, Bucket> load_buckets() override {};
+    std::unordered_map<std::string, Bucket> load_buckets() override;
     // MPU
     asio::awaitable<int> do_create_mpu(std::string_view o, std::string uploadId) override;
     std::unordered_map<std::string, Multipart> get_active_mpus() override;
@@ -147,7 +147,8 @@ private:
     spdk_io_channel* io_channel_ = nullptr;
     uint64_t io_unit_size_;
     std::unique_ptr<IndexStore> index_ = nullptr;
-    spdk_blob_id user_blob_id;
+    spdk_blob_id user_blob_id_;
+    spdk_blob_id bucket_blob_id_;
 
     BlobStoreConfig conf_;
     std::atomic<bool> index_ready = false;
@@ -177,7 +178,7 @@ private:
     static void iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno);
     static void get_blob_metadata(spdk_blob* blob, Object* o, const char*& key);
     void do_delete_async(spdk_blob_id blobid);
-    void create_or_load_state_objects();
+    void create_or_load_state_objects(std::string lobos_prefix);
     bool metadata_remove_user_keys(std::string& name, std::string key);
 };
 
@@ -195,5 +196,13 @@ struct UserOpCtx {
     SpdkStore* store;
     std::vector<User>* users;
     spdk_blob* blob;
+    bool complete{false};
+};
+
+struct BucketOpCtx {
+    SpdkStore* store;
+    std::unordered_map<std::string, Bucket>* buckets;
+    spdk_blob* blob;
+    std::function<void(int)> complete_cb;
     bool complete{false};
 };
