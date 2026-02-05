@@ -35,6 +35,12 @@ void pin_thread_to_core(int core_id) {
 }
 
 asio::awaitable<bool> S3HttpServer::auth_request(const http::request<http::buffer_body>& req) {
+    /* This is what a Authorization header looks like: 
+        AWS4-HMAC-SHA256 Credential=LBLPWWV5OOC76OWOZS0C/20260204/lobos1/s3/aws4_request, \ 
+        SignedHeaders=host;x-amz-content-sha256;x-amz-date, \
+        Signature=0b58884f49810a7f1830648aa4296262b15f999be806e7da1a302a3bcba6b43a
+    */
+
     if (conf_.auth_enabled) {
         auto auth = req["Authorization"];
         if(auth.empty())
@@ -49,20 +55,20 @@ asio::awaitable<bool> S3HttpServer::auth_request(const http::request<http::buffe
             co_return false;
         auto pos_e = auth.find(",");
         beast::string_view auth_creds = auth.substr(pos_s, pos_e-pos_s);
+        std::istringstream ss(auth_creds);
+        
+        std::string access_key;
+        std::string scope_date;
+        std::string scope_region;
+        std::getline(ss, access_key, '/');
+        std::getline(ss, scope_date, '/');
+        std::getline(ss, scope_region, '/');
 
-        auto in_pos = auth_creds.find("/");
-        auto access_key = auth_creds.substr(0, in_pos);
         if (!s3_users_.contains(access_key))
             co_return false;
 
-        auth_creds.remove_prefix(in_pos+1);
-        in_pos = auth_creds.find('/');
-        auto scope_date = auth_creds.substr(0, in_pos);
-        auto out_pos = auth_creds.find('/', in_pos+1);
-        auto scope_region = auth_creds.substr(in_pos+1, out_pos-in_pos-1);
-
+        // Remove everything we already parsed
         auth.remove_prefix(pos_e + 1);
-
         // Get signed headers
         pos_s = auth.find("SignedHeaders=") + beast::string_view("SignedHeaders=").size();
         if (pos_s == beast::string_view::npos)
@@ -133,11 +139,10 @@ asio::awaitable<bool> S3HttpServer::auth_request(const http::request<http::buffe
 
         std::string stringToSign = "AWS4-HMAC-SHA256\n" +
             std::string(req["x-amz-date"]) +
-            "\n" + std::string(auth_creds) + "\n"
+            "\n" + scope_date + "/" + scope_region + "/s3/aws4_request"  + "\n"
             + shaCannonReq;
-
-        auto date_key = hmac_sha256("AWS4"+ s3_users_[access_key], std::string(scope_date));
-        auto region_key = hmac_sha256(date_key, std::string(scope_region));
+        auto date_key = hmac_sha256("AWS4"+ s3_users_[access_key], scope_date);
+        auto region_key = hmac_sha256(date_key, scope_region);
         auto svc_key = hmac_sha256(region_key, "s3");
         auto signing_key = hmac_sha256(svc_key, "aws4_request");
         auto calc = hmac_sha256(signing_key, stringToSign);

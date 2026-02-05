@@ -256,17 +256,10 @@ std::vector<User> FsStore::metadata_list_users(std::string filter) {
 
         for (auto& entry : boost::make_iterator_range(fs::directory_iterator(user))) {
             std::string s = entry.path().string().substr(user.path().string().length() + 1);
-            auto pos = s.find('_');
-            if (pos == beast::string_view::npos)
-                break;
-            u.key = s.substr(0, pos);
-            s.erase(0, pos+1);
-            pos = s.find('_');
-            if (pos == beast::string_view::npos)
-                break;
-            u.secret = s.substr(0, pos);
-            s.erase(0, pos+1);
-            u.backend = s;
+            std::istringstream ss(s);
+            std::getline(ss, u.key, '_');
+            std::getline(ss, u.secret, '_');
+            std::getline(ss, u.backend);
             users.emplace_back(u);
         }
     }
