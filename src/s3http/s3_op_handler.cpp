@@ -15,7 +15,7 @@ std::string generate_upload_id() {
 }
 
 asio::awaitable<http::message_generator> S3OpHandler::handle_head() {
-    if (key_.empty()) {
+    if (is_bucket_op_) {
         http::response<http::string_body> res{http::status::ok, req_.version()};
         res.set(http::field::server, lobos::http::server_name);
         res.insert("x-amz-bucket-region", "lobos");
@@ -42,7 +42,7 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_get() {
         co_return co_await ok_list_all_buckets();
     }
 
-    if (key_.substr(0, key_.length()-1) == req_[lobos::s3::bucket]) {
+    if (is_bucket_op_) {
         if (query_params_.contains("versioning") || 
             query_params_.contains("object-lock") || 
             query_params_.contains("max-buckets") ||
@@ -70,7 +70,7 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_put() {
     // this is a bucket create
     // We don't supprot anything that can
     // be in a body yet so just create it and return
-    if (key_.empty()) {
+    if (is_bucket_op_) {
         auto b = co_await store_.create_bucket(req_[lobos::s3::bucket]);
         if (b.prefix.empty())
             co_return internal_error_res();

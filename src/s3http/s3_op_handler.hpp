@@ -27,7 +27,8 @@ public:
     asio::awaitable<http::message_generator> handle() {
         if (!req_[lobos::s3::bucket].empty() && !buckets_.contains(req_[lobos::s3::bucket]))
             co_return no_such_bucket_res();
-
+        if (key_.empty())
+            is_bucket_op_ = true;
         key_ = buckets_[req_[lobos::s3::bucket]].prefix + key_;
         switch (req_.method()) {
             case http::verb::head:    co_return co_await handle_head();
@@ -47,6 +48,7 @@ private:
     std::unordered_map<std::string, std::string> query_params_;
     std::unordered_map<std::string, Multipart>& active_mpus_;
     std::unordered_map<std::string, Bucket>& buckets_;
+    bool is_bucket_op_{false};
 
     // Verb handling func
     asio::awaitable<http::message_generator> handle_head();
