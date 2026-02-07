@@ -84,7 +84,7 @@ void SpdkStore::iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno) {
     if (!skip) {
         ctx->index_->add_entry(key, o);
         std::cout << "index builder - added index entry: " << key 
-                << " key: " << o.blob_id << std::endl;
+                << " blob: " << o.blob_id << std::endl;
     }
     spdk_bs_iter_next(ctx->bs_, blb, iter_cb, ctx);
 }
@@ -217,28 +217,45 @@ void SpdkStore::init_store(std::string devSpec) {
 }
 
 asio::awaitable<void> SpdkStore::do_list(std::string& prefix, session_buffer& buffer) {
-    // this logic should really be in the index
+
+    auto pos = prefix.find_last_of('/');
+    std::string base = prefix.substr(0, pos+1);
+    std::string_view key_skip;
+
     auto it = index_->index.lower_bound(prefix);
-    std::string pre;
-    for(; it != index_->index.end(); it++) {
-        if (!it->first.starts_with(prefix)) break;
+    for(; it!= index_->index.end(); it++) {
+
+        if (!it->first.starts_with(prefix))
+            break;
+        if (it->first.starts_with(base + lobos_mpu_prefix))
+            continue;
 
         std::string s;
-        // if the element contains `/` its a dir so we just display the common prefix thing
-        auto key_comp = it->first;
-        key_comp.erase(0, prefix.length());
-        auto pos = key_comp.find('/');
+        std::string key = it->first;
+        key.erase(0, base.length());
+
+        if(!key_skip.empty() && key.starts_with(key_skip))
+            continue;
+
+        // If the key contains a `/` we remove everything after the
+        // first / otherwise it would be a recursive listing
+        // and we store that key so that next run can skip it
+        auto pos = key.find('/');
         if (pos != std::string::npos) {
+            key.erase(pos+1);
+            key_skip = key;
+        }
 
-            if (pre == key_comp.substr(0, pos+1)) continue;
-
-            pre = key_comp.substr(0, pos+1);
+        if (key == key_skip) {
             s =  "<CommonPrefixes>"
-                "<Prefix>" + pre + "</Prefix>"
+                "<Prefix>" + key + "</Prefix>"
                 "</CommonPrefixes>";
+            // We store the key to skip it next runs
+            // in order to avoid recursive listing
+            key_skip = key;
         } else {
             s ="<Contents>"
-                "<Key>" + it->first + "</Key>"
+                "<Key>" + key + "</Key>"
                 "<LastModified>" + to_iso8601(it->second.last_modified) + "</LastModified>"
                 "<Size>" + std::to_string(it->second.size) + "</Size>"
                 "</Contents>";
@@ -275,13 +292,13 @@ asio::awaitable<bool> SpdkStore::create_bucket(std::string& key, BucketMetadata&
 
 asio::awaitable<int> SpdkStore::delete_bucket(std::string& bucket) {
     // Check if the bucket is empty
-    auto it = index_->index.lower_bound(bucket);
-    for(; it != index_->index.end(); it++) {
+    for(auto it = index_->index.lower_bound(bucket); it != index_->index.end(); it++) {
+        if (!it->first.starts_with(bucket + "/"))
+            break;
         if(!it->first.starts_with(bucket + "/" + lobos_mpu_prefix))
             co_return -ENOTEMPTY;
     }
 
-    index_->index.erase(bucket + "/" + lobos_mpu_prefix);
     // delete the xattr from disk
     co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, bucket](auto complete) {
         auto ctx = new BucketCRUDOpCtx{this, bucket, BucketMetadata{}, nullptr, std::move(complete)};
@@ -457,7 +474,6 @@ asio::awaitable<int> SpdkStore::do_write(std::string& oid, session_buffer& buffe
     ioctx->md->size = ioctx->buffer->size();
     ioctx->md->last_modified = std::time(nullptr);
     spdk_blob_id old_blob_id = 0;
-
     auto it = index_->index.find(oid);
     if (it != index_->index.end()) {
         old_blob_id = it->second.blob_id;
@@ -536,7 +552,6 @@ asio::awaitable<bool> SpdkStore::do_delete(std::string& oid) {
             delete ctx;
         }, ctx);
     });
-
     co_return true;
 }
 
@@ -574,7 +589,7 @@ asio::awaitable<std::tuple<size_t, time_t>> SpdkStore::do_metadata_req(std::stri
 std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  SpdkStore::get_active_mpus() {
     std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> mpus = {};
 
-    for (auto it = index_->index.lower_bound(lobos_mpu_prefix);it != index_->index.end();) {
+    for (auto it = index_->index.lower_bound(lobos_mpu_prefix);it != index_->index.end(); it++) {
         if (!it->first.starts_with(lobos_mpu_prefix))
             break;
         // initiated format:
@@ -591,16 +606,13 @@ std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  Spdk
         std::getline(ss, upload_id, '_');
         mp.init_time = 0;
         mpus[bucket].emplace(upload_id, mp);
-
-        // erase it so it doesn't show up in list post boot
-        it = index_->index.erase(it);
     }
 
     // Parts are stored in format:
     // <bucket>/.__lobos__mpu__/<upload_id>_<partN>_<key>
     for (auto& [bucket, m] : mpus) {
         std::string pref = bucket + "/" + lobos_mpu_prefix + "/";
-        for (auto it = index_->index.lower_bound(pref); it != index_->index.end();) {
+        for (auto it = index_->index.lower_bound(pref); it != index_->index.end(); it++) {
             if (!it->first.starts_with(pref))
                 break;
             std::string object_part = it->first.substr(pref.length());
@@ -620,9 +632,6 @@ std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  Spdk
             // just cause i know ill forget if i
             // dont put it in comment
             // m[upload_id].current_size += 0;
-
-            // erase it so it doesn't show up in list post boot
-            it = index_->index.erase(it);
         }
     }
 
@@ -683,7 +692,7 @@ asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string& bucket, std::string
 
 asio::awaitable<int> SpdkStore::do_abort_mpu(std::string& oid, std::string& bucket, std::string& upload_id, Multipart& mp) {
     for (const auto& part : mp.parts) {
-        auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key + "_" + bucket;
+        auto k = bucket + "/" + lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key;
         do_delete_async(index_->index[k].blob_id);
     }
 

@@ -24,6 +24,20 @@ asio::awaitable<bool> S3Bucket::create_bucket() {
 }
 
 asio::awaitable<int> S3Bucket::delete_bucket() {
+
+    // Abort all incomplete MPU
+    std::vector<std::string> mpus_to_abort;
+    if (mpus_.size() > 0) {
+        for (auto k : mpus_)
+            mpus_to_abort.push_back(k.first);
+    }
+
+    for (auto& upload_id : mpus_to_abort) {
+        auto aborted = co_await abort_mpu(upload_id);
+        if (!aborted)
+            co_return -1;
+    }
+
     co_return co_await store_.delete_bucket(name_);
 }
 
@@ -74,7 +88,6 @@ asio::awaitable<bool> S3Bucket::abort_mpu(std::string& upload_id) {
     auto rc = co_await store_.do_abort_mpu(oid, name_, upload_id, mpus_[upload_id]);
     if (rc)
         co_return false;
-    
     mpus_.erase(upload_id);
     co_return true;
 }

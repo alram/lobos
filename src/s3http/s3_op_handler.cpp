@@ -58,9 +58,9 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_put() {
         co_return bad_request_res("InvalidRequest", "No bucket specified");
 
     // this is a bucket create
-    // We don't supprot anything that can
+    // We don't support anything that can
     // be in a body yet so just create it and return
-    if (is_bucket_op_) {
+    if (is_bucket_op_ && query_params_.empty()) {
         auto created = co_await bucket_->create_bucket();
         if (!created) {
             buckets_.erase(bucket_->name_);
@@ -91,6 +91,9 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_put() {
         auto it = bucket_->mpus_.find(query_params_["uploadId"]);;
         if (it == bucket_->mpus_.end())
             co_return bad_request_res("NoSuchUpload", "The specified upload does not exist.");
+        if (key_.empty() || key_ != bucket_->mpus_[query_params_["uploadId"]].key)
+            co_return bad_request_res("NoSuchUpload", "The specified upload does not exist.");
+
         // TODO min body size for MPU
         // https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
         // We manipulate key to make it a mpu identifiable object in the backend
@@ -124,6 +127,8 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_put() {
 asio::awaitable<http::message_generator> S3OpHandler::handle_post() {
     // new mpu
     if (query_params_.contains("uploads")) {
+        if (key_.empty())
+            co_return bad_request_res("InvalidRequest", "MPU require a key");
         auto upload_id = co_await bucket_->create_mpu(key_);
         if (upload_id.empty())
             co_return internal_error_res();

@@ -171,6 +171,39 @@ class TestLobosS3:
         assert response['ResponseMetadata']['HTTPStatusCode'] == 204
         print(f"Deleted bucket: {self.bucket_name}")
 
+    @pytest.mark.order(13)
+    def test_delete_bucket_with_incomplete_mpu(self):
+        """Test DeleteBucket with incomplete MPUs"""
+        # Create a new bucket for this test
+        temp_bucket = f"test-bucket-incomplete-{self.test_id}"
+        response = self.s3_client.create_bucket(Bucket=temp_bucket)
+        assert response['ResponseMetadata']['HTTPStatusCode'] == 200
+        
+        # Start MPU
+        response = self.s3_client.create_multipart_upload(
+            Bucket=temp_bucket,
+            Key=self.mpu_key
+        )
+        assert 'UploadId' in response
+        upload_id = response['UploadId']  # Use this local variable
+        
+        # Upload a part
+        part_data = b"A" * (5 * 1024 * 1024)  # 5MB part
+        response = self.s3_client.upload_part(
+            Bucket=temp_bucket,
+            Key=self.mpu_key,
+            PartNumber=1,
+            UploadId=upload_id,  # Changed from self.upload_id to upload_id
+            Body=part_data
+        )
+        assert 'ETag' in response
+        part_etag = response['ETag']
+        
+        # Try to delete bucket with incomplete MPU
+        response = self.s3_client.delete_bucket(Bucket=temp_bucket)
+        assert response['ResponseMetadata']['HTTPStatusCode'] == 204
+        print(f"Deleted bucket with incomplete parts: {temp_bucket}")
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v', '-s'])
