@@ -23,11 +23,11 @@ void FsStore::init_store(std::string) {
         close(fd);
     }
 }
-asio::awaitable<int> FsStore::do_write(std::string o, session_buffer& buffer) {
-    create_dest_dirs_if_not_exist(o);
+asio::awaitable<int> FsStore::do_write(std::string& oid, session_buffer& buffer) {
+    create_dest_dirs_if_not_exist(oid);
     // We always overwrite since it's an object
     int flags = O_WRONLY | O_CREAT | O_TRUNC;
-    int fd = open(o.c_str(), flags, 0644);
+    int fd = open(oid.c_str(), flags, 0644);
     size_t total_written = 0;
     while (total_written < buffer.size()) {
         ssize_t written = write(fd, buffer.data() + total_written, buffer.size() - total_written);
@@ -44,8 +44,8 @@ asio::awaitable<int> FsStore::do_write(std::string o, session_buffer& buffer) {
 
 }
 
-asio::awaitable<int> FsStore::do_read(std::string o, uint64_t offset, session_buffer& buffer) {
-    std::string f(o);
+asio::awaitable<int> FsStore::do_read(std::string& oid, uint64_t offset, session_buffer& buffer) {
+    std::string f(oid);
     int fd = open(f.c_str(), O_RDONLY);
     if (fd < 0)
         co_return -1;
@@ -58,8 +58,8 @@ asio::awaitable<int> FsStore::do_read(std::string o, uint64_t offset, session_bu
     co_return 0;
 }
 
-asio::awaitable<bool> FsStore::do_delete(std::string_view o) {
-    auto deleted = boost::filesystem::remove(o);
+asio::awaitable<bool> FsStore::do_delete(std::string& oid) {
+    auto deleted = boost::filesystem::remove(oid);
     co_return deleted;
 }
 
@@ -97,25 +97,38 @@ asio::awaitable<void> FsStore::do_list(std::string& prefix, session_buffer& buff
     co_return;
 };
 
-asio::awaitable<bool> FsStore::create_bucket(std::string& key, BucketMetadata& md) {
+asio::awaitable<bool> FsStore::create_bucket(std::string& oid, BucketMetadata& md) {
     // as is its create/replace which should be fine?
-    key = "user." + key;
-    int ret = setxattr(lobos_bucket_prefix.c_str(), key.c_str(), &md, sizeof(md), 0);
+    std::string xattr = "user." + oid;
+    int ret = setxattr(lobos_bucket_prefix.c_str(), xattr.c_str(), &md, sizeof(md), 0);
     if (ret == -1)
         co_return false;
     // create the dir otherwise ls on empty bucket will fail
-    auto pos = key.find('_');
-    auto dir = key.substr(pos+1) + "/dummy";
+    auto dir = oid + "/dummy";
     create_dest_dirs_if_not_exist(dir);
 
     co_return true;
 };
 
-asio::awaitable<int> FsStore::delete_bucket(std::string_view bucket) {
-    // boost::system::error_code ec;
-    // fs::remove(bucket, ec);
-    // if (ec)
-    //     co_return ec.value();
+asio::awaitable<int> FsStore::delete_bucket(std::string& bucket) {
+    boost::system::error_code ec;
+    // We need to check if the bucket is empty. We can rely on fs:remove()
+    // to return an error only because of the hidden mpu dir
+    for (auto& entry : boost::make_iterator_range(fs::directory_iterator(bucket))) {
+        std::string f = entry.path().string().substr(bucket.length() + 1);
+        if (!f.starts_with(lobos_mpu_prefix))
+            co_return -ENOTEMPTY;
+    }
+    fs::remove_all(bucket, ec);
+    if (ec)
+        co_return ec.value();
+
+    // Delete xattr from state object
+    std::string xattr = "user." + bucket;
+    auto rc = removexattr(lobos_bucket_prefix.c_str(), xattr.c_str());
+    if (rc == -1)
+        co_return rc;
+
     co_return 0;
 };
 
@@ -128,17 +141,18 @@ std::vector<BucketRecord> FsStore::load_buckets() {
         return buckets;
 
     const char* key = keys.data();
-    const char* pre = ("users." + lobos_bucket_prefix).c_str();
+    const char* pre = ("user." + lobos_bucket_prefix).c_str();
     while (key < keys.data() + len) {
         if (strncmp(key, pre, strlen(pre))) {
             BucketMetadata md;
             ssize_t ret = getxattr(lobos_bucket_prefix.c_str(), key, &md, sizeof(md));
-            if (ret == sizeof(md))
+            if (ret == sizeof(md)) {
                 buckets.emplace_back(BucketRecord{
-                    std::string(key + 6), //skips 'users.' since its fs specific
+                    std::string(key + 5), //skips 'user.' since its fs specific
                     md.owner,
                     md.created_at
                 });
+            }
         }
         key += strlen(key) + 1;
     }
@@ -146,12 +160,12 @@ std::vector<BucketRecord> FsStore::load_buckets() {
     return buckets;
 }
 
-asio::awaitable<std::tuple<size_t, time_t>> FsStore::do_metadata_req(std::string_view o) {
+asio::awaitable<std::tuple<size_t, time_t>> FsStore::do_metadata_req(std::string& oid) {
     size_t size;
     time_t last_modified;
     try {
-        size = fs::file_size(o);
-        last_modified = fs::last_write_time(o);
+        size = fs::file_size(oid);
+        last_modified = fs::last_write_time(oid);
     } catch (const fs::filesystem_error& e) {
         size = last_modified = 0;
     }
@@ -269,16 +283,15 @@ asio::awaitable<int> FsStore::do_abort_mpu(std::string& oid, std::string& bucket
     co_return 0;
 }
 
-std::string FsStore::create_dest_dirs_if_not_exist(std::string object) {
+void FsStore::create_dest_dirs_if_not_exist(const std::string& oid) {
     //We need to ensure all the parents directories exist before anything
-    auto pos = object.rfind('/');
+    auto pos = oid.rfind('/');
     if (pos != beast::string_view::npos) {
-        auto path = object.substr(0, pos);
+        auto path = oid.substr(0, pos);
         if (!fs::exists(path)) {
             fs::create_directories(path);
         }
     }
-    return object;
 }
 
 int FsStore::metadata_add_user(User u) {

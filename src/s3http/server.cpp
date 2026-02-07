@@ -236,7 +236,6 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
                 *store_,
                 bucket_name,
                 0,
-                "",
                 std::time(nullptr),
                 mpu
             );

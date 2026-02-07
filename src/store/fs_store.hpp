@@ -14,15 +14,15 @@ namespace asio = boost::asio;
 class FsStore : public Store {
 public:
     void init_store(std::string) override;
-    asio::awaitable<int> do_write(std::string o, session_buffer& buffer) override;
-    asio::awaitable<int> do_read(std::string o, uint64_t offset, session_buffer& buffer) override;
-    asio::awaitable<bool> do_delete(std::string_view o) override;
+    asio::awaitable<int> do_write(std::string& oid, session_buffer& buffer) override;
+    asio::awaitable<int> do_read(std::string& oid, uint64_t offset, session_buffer& buffer) override;
+    asio::awaitable<bool> do_delete(std::string& oid) override;
     asio::awaitable<void> do_list(std::string& prefix, session_buffer& buffer) override;
-    asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string_view o) override;
+    asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string& oid) override;
     void shutdown_store() override {};
     // Buckets
     asio::awaitable<bool> create_bucket(std::string& key, BucketMetadata& md) override;
-    asio::awaitable<int> delete_bucket(std::string_view bucket) override;
+    asio::awaitable<int> delete_bucket(std::string& bucket) override;
     std::vector<BucketRecord> load_buckets() override;
     // MPU
     asio::awaitable<int> do_create_mpu(std::string& oid, std::string& upload_id)override;
@@ -37,5 +37,5 @@ public:
     bool metadata_rm_key(std::string user, User u) override;
 
 private:
-    static std::string create_dest_dirs_if_not_exist(std::string object);
+    void create_dest_dirs_if_not_exist(const std::string& oid);
 };

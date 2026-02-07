@@ -229,9 +229,6 @@ asio::awaitable<void> SpdkStore::do_list(std::string& prefix, session_buffer& bu
         key_comp.erase(0, prefix.length());
         auto pos = key_comp.find('/');
         if (pos != std::string::npos) {
-            // there's a catch where if you do `dir/` you lsit the dir
-            // but if you do `dir` you list the pre. so if pre starts with `/`
-            // we know we need to previous dir
 
             if (pre == key_comp.substr(0, pos+1)) continue;
 
@@ -254,17 +251,17 @@ asio::awaitable<void> SpdkStore::do_list(std::string& prefix, session_buffer& bu
 asio::awaitable<bool> SpdkStore::create_bucket(std::string& key, BucketMetadata& md) {
 
     co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, key, md](auto complete) {
-        auto ctx = new BucketCreateOpCtx{this, key, md, nullptr, std::move(complete)};
+        auto ctx = new BucketCRUDOpCtx{this, key, md, nullptr, std::move(complete)};
         spdk_bs_open_blob(bs_, bucket_blob_id_, [](void *cb_arg, spdk_blob *blob, int bserrno) {
-            auto ctx = static_cast<BucketCreateOpCtx*>(cb_arg);
+            auto ctx = static_cast<BucketCRUDOpCtx*>(cb_arg);
             if (bserrno) { std::cerr << "couldn't open bucket blob: " << bserrno << std::endl; }
             ctx->blob = blob;
             spdk_blob_set_xattr(blob,  ctx->key.c_str(), &ctx->md, sizeof(BucketMetadata));
             spdk_blob_sync_md(blob, [](void *cb_arg, int bserrno) {
                 if(bserrno) { std::cerr << "couldn't sync md" << std::endl; }
-                auto ctx = static_cast<BucketCreateOpCtx*>(cb_arg);
+                auto ctx = static_cast<BucketCRUDOpCtx*>(cb_arg);
                 spdk_blob_close(ctx->blob, [](void *cb_arg, int bserrno) {
-                    auto ctx = static_cast<BucketCreateOpCtx*>(cb_arg);
+                    auto ctx = static_cast<BucketCRUDOpCtx*>(cb_arg);
                     if (bserrno) { std::cerr << "couldn't close blob" << std::endl; }
                     ctx->complete(0);
                     delete(ctx);
@@ -274,6 +271,39 @@ asio::awaitable<bool> SpdkStore::create_bucket(std::string& key, BucketMetadata&
     });
 
     co_return true;
+}
+
+asio::awaitable<int> SpdkStore::delete_bucket(std::string& bucket) {
+    // Check if the bucket is empty
+    auto it = index_->index.lower_bound(bucket);
+    for(; it != index_->index.end(); it++) {
+        if(!it->first.starts_with(bucket + "/" + lobos_mpu_prefix))
+            co_return -ENOTEMPTY;
+    }
+
+    index_->index.erase(bucket + "/" + lobos_mpu_prefix);
+    // delete the xattr from disk
+    co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, bucket](auto complete) {
+        auto ctx = new BucketCRUDOpCtx{this, bucket, BucketMetadata{}, nullptr, std::move(complete)};
+        spdk_bs_open_blob(bs_, bucket_blob_id_, [](void *cb_arg, spdk_blob *blob, int bserrno) {
+            auto ctx = static_cast<BucketCRUDOpCtx*>(cb_arg);
+            if (bserrno) { std::cerr << "couldn't open bucket blob: " << bserrno << std::endl; }
+            ctx->blob = blob;
+            spdk_blob_remove_xattr(blob, ctx->key.c_str());
+            spdk_blob_sync_md(blob, [](void *cb_arg, int bserrno) {
+                if(bserrno) { std::cerr << "couldn't sync md" << std::endl; }
+                auto ctx = static_cast<BucketCRUDOpCtx*>(cb_arg);
+                spdk_blob_close(ctx->blob, [](void *cb_arg, int bserrno) {
+                    auto ctx = static_cast<BucketCRUDOpCtx*>(cb_arg);
+                    if (bserrno) { std::cerr << "couldn't close blob" << std::endl; }
+                    ctx->complete(0);
+                    delete(ctx);
+                }, ctx);
+            }, ctx);
+        }, ctx);
+    });
+
+    co_return 0;
 }
 
 std::vector<BucketRecord> SpdkStore::load_buckets() {
@@ -420,15 +450,15 @@ asio::awaitable<int> SpdkStore::write_data(IoCtx* ioctx) {
     co_return size;
 }
 
-asio::awaitable<int> SpdkStore::do_write(std::string o, session_buffer& buffer) {
+asio::awaitable<int> SpdkStore::do_write(std::string& oid, session_buffer& buffer) {
     auto ioctx = std::make_unique<IoCtx>(buffer);
-    ioctx->key = o;
+    ioctx->key = oid;
     ioctx->md = std::make_unique<BlobMetadata>();
     ioctx->md->size = ioctx->buffer->size();
     ioctx->md->last_modified = std::time(nullptr);
     spdk_blob_id old_blob_id = 0;
 
-    auto it = index_->index.find(std::string(o));
+    auto it = index_->index.find(oid);
     if (it != index_->index.end()) {
         old_blob_id = it->second.blob_id;
         index_->index.erase(it);  // oh boy lets hope the write doesn't fail TODO
@@ -447,14 +477,14 @@ asio::awaitable<int> SpdkStore::do_write(std::string o, session_buffer& buffer) 
     co_return rc;
 }
 
-asio::awaitable<int> SpdkStore::do_read(std::string o, uint64_t offset, session_buffer& buffer) {
-    auto it = index_->index.find(o);
+asio::awaitable<int> SpdkStore::do_read(std::string& oid, uint64_t offset, session_buffer& buffer) {
+    auto it = index_->index.find(oid);
     if (it == index_->index.end()) {
         co_return -ENOENT;
     }
 
     auto ioctx = new IoCtx(buffer);
-    ioctx->key = o;
+    ioctx->key = oid;
     ioctx->blob_id = it->second.blob_id;
     ioctx->offset = offset;
 
@@ -486,14 +516,14 @@ asio::awaitable<int> SpdkStore::do_read(std::string o, uint64_t offset, session_
     co_return 0;
 }
 
-asio::awaitable<bool> SpdkStore::do_delete(std::string_view o) {
-    auto it = index_->index.find(o);
+asio::awaitable<bool> SpdkStore::do_delete(std::string& oid) {
+    auto it = index_->index.find(oid);
     if (it == index_->index.end()) {
         co_return -ENOENT;
     }
 
     auto ioctx = new IoCtx();
-    ioctx->key = o;
+    ioctx->key = oid;
     ioctx->blob_id = it->second.blob_id;
 
     co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, ioctx](auto complete) {
@@ -533,8 +563,8 @@ void SpdkStore::do_delete_async(spdk_blob_id blob_id) {
     spdk_thread_send_msg(spdk_reactor_->get_thread(), &delete_ctx::execute, ctx);
 }
 
-asio::awaitable<std::tuple<size_t, time_t>> SpdkStore::do_metadata_req(std::string_view o) {
-    auto it = index_->index.find(o);
+asio::awaitable<std::tuple<size_t, time_t>> SpdkStore::do_metadata_req(std::string& oid) {
+    auto it = index_->index.find(oid);
     if (it != index_->index.end()) {
         co_return std::tuple<size_t, time_t>{it->second.size, it->second.last_modified};
     }

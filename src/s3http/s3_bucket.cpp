@@ -1,10 +1,5 @@
 # include "s3_bucket.hpp"
 
-void S3Bucket::generate_prefix() {
-    const std::string allowed_chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+";
-    random_gen(10, allowed_chars, prefix_);
-}
-
 std::string S3Bucket::generate_upload_id() {
     unsigned char buf[16];
     RAND_bytes(buf, 16);
@@ -24,10 +19,7 @@ asio::awaitable<bool> S3Bucket::create_bucket() {
         created_at_,
     };
 
-    generate_prefix();
-    std::string key = prefix_ + '_' + name_;
-
-    auto created = co_await store_.create_bucket(key, md);
+    auto created = co_await store_.create_bucket(name_, md);
     co_return created;
 }
 

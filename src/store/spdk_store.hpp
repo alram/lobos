@@ -114,22 +114,22 @@ public:
     };
 
     void init_store(std::string devSpec) override;
-    asio::awaitable<int> do_write(std::string o, session_buffer& buffer) override;
+    asio::awaitable<int> do_write(std::string& object, session_buffer& buffer) override;
     asio::awaitable<int> create_and_size_blob(IoCtx* ioctx);
     asio::awaitable<int> write_data(IoCtx* ioctx);
-    asio::awaitable<int> do_read(std::string o, uint64_t offset, session_buffer& buffer) override;
-    asio::awaitable<bool> do_delete(std::string_view o) override;
-    asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string_view o) override;
+    asio::awaitable<int> do_read(std::string& object, uint64_t offset, session_buffer& buffer) override;
+    asio::awaitable<bool> do_delete(std::string& object) override;
+    asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string& object) override;
     asio::awaitable<void> do_list(std::string& prefix, session_buffer& buffer) override;
     // Buckets
     asio::awaitable<bool> create_bucket(std::string& key, BucketMetadata& md) override;
-    asio::awaitable<int> delete_bucket(std::string_view bucket) override {};
+    asio::awaitable<int> delete_bucket(std::string& bucket) override;
     std::vector<BucketRecord> load_buckets() override;
     // MPU
-    asio::awaitable<int> do_create_mpu(std::string& oid, std::string& upload_id) override;
+    asio::awaitable<int> do_create_mpu(std::string& object, std::string& upload_id) override;
     std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> get_active_mpus() override;
     asio::awaitable<int> do_assemble_mpu(std::string& bucket, std::string& upload_id, Multipart& mp, std::vector<int>& parts) override;
-    asio::awaitable<int> do_abort_mpu(std::string& oid, std::string& bucket, std::string& upload_id, Multipart& mp)override;
+    asio::awaitable<int> do_abort_mpu(std::string& object, std::string& bucket, std::string& upload_id, Multipart& mp)override;
     void shutdown_store() override;
     // Metadata
     int metadata_add_user(User u) override;
@@ -199,7 +199,7 @@ struct UserOpCtx {
     bool complete{false};
 };
 
-struct BucketCreateOpCtx {
+struct BucketCRUDOpCtx {
     SpdkStore* store;
     std::string key;
     BucketMetadata md;

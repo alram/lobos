@@ -68,24 +68,14 @@ public:
         auto buckets_records = store_->load_buckets();
 
         for (const auto& rec : buckets_records) {
-            // key is prefix _ bucket name
-            auto pos = rec.key.find('_');
-            if (pos == std::string::npos) {
-                std::cerr << "ugh this should not happen, returned a bucket idenfier: " << rec.key << std::endl;
-                break;
-            }
-            std::string prefix = rec.key.substr(0, pos);
-            std::string name = rec.key.substr(pos+1);
-
             auto bucket = std::make_unique<S3Bucket>(
                 *store_,
-                name,
+                rec.key,
                 rec.owner,
-                prefix,
                 rec.created_at,
-                std::move(mpus[name])
+                std::move(mpus[rec.key])
             );
-            buckets_.emplace(name, std::move(bucket));
+            buckets_.emplace(rec.key, std::move(bucket));
         }
 
     }

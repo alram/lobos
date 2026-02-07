@@ -158,7 +158,7 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_delete() {
 
     if (is_bucket_op_) {
         int r = co_await bucket_->delete_bucket();
-        if (r == ENOTEMPTY) {
+        if (r == -ENOTEMPTY) {
             http::response<http::string_body> res{http::status::conflict, req_.version()};
             res.set(http::field::server, lobos::http::server_name);
             res.keep_alive(false);
@@ -226,6 +226,7 @@ asio::awaitable<http::message_generator> S3OpHandler::ok_bucket_ops() {
     } else if (query_params_.contains("uploads")) {
         std::string s = 
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<ListMultipartUploadsResult>"
             "<Bucket>" + std::string(req_[lobos::s3::bucket]) + "</Bucket>";
         for (auto& it : bucket_->mpus_) {
             s += 

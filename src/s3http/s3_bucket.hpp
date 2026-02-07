@@ -5,11 +5,10 @@
 class S3Bucket {
 friend class S3OpHandler;
 public:
-    S3Bucket(Store& store, std::string name, uint64_t owner, std::string prefix, time_t created_at, std::unordered_map<std::string, Multipart> mpus)
+    S3Bucket(Store& store, std::string name, uint64_t owner, time_t created_at, std::unordered_map<std::string, Multipart> mpus)
         : store_(store)
         , name_(name)
         , owner_(owner)
-        , prefix_(prefix)
         , created_at_(created_at)
         , mpus_(std::move(mpus))
     {}
@@ -31,13 +30,11 @@ private:
     Store& store_;
     std::string name_;
     uint64_t owner_;
-    std::string prefix_;
     time_t created_at_;
 
     std::unordered_map<std::string, Multipart> mpus_;
     BucketStats stats_; // we won't use this unless we've a persistent index
 
-    void generate_prefix();
     static std::string generate_upload_id();
 
 };
