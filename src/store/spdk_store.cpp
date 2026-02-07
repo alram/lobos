@@ -216,18 +216,17 @@ void SpdkStore::init_store(std::string devSpec) {
     create_or_load_state_objects(lobos_bucket_prefix);
 }
 
-asio::awaitable<void> SpdkStore::do_list(std::string& bucket, std::string_view prefix, session_buffer& buffer) {
+asio::awaitable<void> SpdkStore::do_list(std::string& prefix, session_buffer& buffer) {
     // this logic should really be in the index
-    std::string prefix_n = bucket + std::string(prefix);
-    auto it = index_->index.lower_bound(prefix_n);
+    auto it = index_->index.lower_bound(prefix);
     std::string pre;
     for(; it != index_->index.end(); it++) {
-        if (!it->first.starts_with(prefix_n)) break;
+        if (!it->first.starts_with(prefix)) break;
 
         std::string s;
         // if the element contains `/` its a dir so we just display the common prefix thing
         auto key_comp = it->first;
-        key_comp.erase(0, prefix_n.length());
+        key_comp.erase(0, prefix.length());
         auto pos = key_comp.find('/');
         if (pos != std::string::npos) {
             // there's a catch where if you do `dir/` you lsit the dir
@@ -252,79 +251,73 @@ asio::awaitable<void> SpdkStore::do_list(std::string& bucket, std::string_view p
     co_return;
 }
 
-asio::awaitable<Bucket> SpdkStore::create_bucket(std::string_view bucket) {
-    Bucket b = {
-        std::string(bucket) + "/",
-        std::time(nullptr),
-    };
-    std::unordered_map<std::string, Bucket> buckets;
-    buckets.insert(std::pair<std::string, Bucket>(std::string(bucket), b));
+asio::awaitable<bool> SpdkStore::create_bucket(std::string& key, BucketMetadata& md) {
 
-    co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, &buckets](auto complete_cb) {
-        auto ctx = new BucketOpCtx{this, &buckets, nullptr, std::move(complete_cb)};
+    co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, key, md](auto complete) {
+        auto ctx = new BucketCreateOpCtx{this, key, md, nullptr, std::move(complete)};
         spdk_bs_open_blob(bs_, bucket_blob_id_, [](void *cb_arg, spdk_blob *blob, int bserrno) {
-            auto ctx = static_cast<BucketOpCtx*>(cb_arg);
+            auto ctx = static_cast<BucketCreateOpCtx*>(cb_arg);
             if (bserrno) { std::cerr << "couldn't open bucket blob: " << bserrno << std::endl; }
             ctx->blob = blob;
-            for (const auto& [name, v] : *ctx->buckets) {
-                std::string key = name + "_" + std::to_string(v.created_at);
-                spdk_blob_set_xattr(blob, key.c_str(), nullptr, 0);
-            }
+            spdk_blob_set_xattr(blob,  ctx->key.c_str(), &ctx->md, sizeof(BucketMetadata));
             spdk_blob_sync_md(blob, [](void *cb_arg, int bserrno) {
                 if(bserrno) { std::cerr << "couldn't sync md" << std::endl; }
-                auto ctx = static_cast<BucketOpCtx*>(cb_arg);
+                auto ctx = static_cast<BucketCreateOpCtx*>(cb_arg);
                 spdk_blob_close(ctx->blob, [](void *cb_arg, int bserrno) {
-                    auto ctx = static_cast<BucketOpCtx*>(cb_arg);
+                    auto ctx = static_cast<BucketCreateOpCtx*>(cb_arg);
                     if (bserrno) { std::cerr << "couldn't close blob" << std::endl; }
-                    ctx->complete_cb(0);
+                    ctx->complete(0);
                     delete(ctx);
                 }, ctx);
             }, ctx);
         }, ctx);
     });
 
-    co_return b;
+    co_return true;
 }
 
-std::unordered_map<std::string, Bucket> SpdkStore::load_buckets() {
-    std::unordered_map<std::string, Bucket> buckets;
+std::vector<BucketRecord> SpdkStore::load_buckets() {
+
+    std::vector<BucketRecord> buckets;
 
     auto load_buckets = [](void *args) {
-        auto ctx = static_cast<BucketOpCtx*>(args);
+        auto ctx = static_cast<BucketsListOpCtx*>(args);
         spdk_bs_open_blob(ctx->store->bs_, ctx->store->bucket_blob_id_, [](void *cb_arg, spdk_blob *blob, int bserrno) {
             if (bserrno) { std::cerr << "couldn't open blob in spdk: " << bserrno << std::endl; }
-            auto ctx = static_cast<BucketOpCtx*>(cb_arg);
+            auto ctx = static_cast<BucketsListOpCtx*>(cb_arg);
             // load all users into the struct and close the blob
             spdk_xattr_names* buckets = nullptr;
             auto rc = spdk_blob_get_xattr_names(blob, &buckets);
             if (rc != 0) {
-                std::cerr << "error retrieving xattrs for users state object" << std::endl;
+                std::cerr << "error retrieving xattrs for bucket state object" << std::endl;
             } else {
                 size_t count = spdk_xattr_names_get_count(buckets);
                 for (size_t i = 0; i < count; i++) {
                     std::string xattr = spdk_xattr_names_get_name(buckets, i);
                     if (xattr == BLOB_META_KEY)
                         continue;
-                    Bucket b;
-                    std::istringstream ss(xattr);
-                    std::string name;
-                    std::getline(ss, name, '_');
-                    std::string create_time_s;
-                    std::getline(ss, create_time_s, '_');
-                    b.prefix = name + "/";
-                    b.created_at = std::stoll(create_time_s);
-                    ctx->buckets->insert(std::pair<std::string, Bucket>(name, b));
+                    BucketRecord b;
+                    b.key = xattr;
+                    const void* xattr_v = nullptr;
+                    size_t xattr_s = 0;
+                    auto rc = spdk_blob_get_xattr_value(blob, xattr.c_str(), &xattr_v, &xattr_s);
+                    if (rc != 0 && (xattr_v && xattr.size() == sizeof(BucketMetadata))) {
+                        const BucketMetadata* md = static_cast<const BucketMetadata*>(xattr_v);
+                        b.created_at = md->created_at;
+                        b.owner = md->owner;
+                        ctx->buckets->emplace_back(b);
+                    }
                 }
             }
             spdk_blob_close(blob, [](void *cb_arg, int bserrno) {
-                auto ctx = static_cast<BucketOpCtx*>(cb_arg);
+                auto ctx = static_cast<BucketsListOpCtx*>(cb_arg);
                 if (bserrno) { std::cerr << "couldn't close blob" << std::endl; }
                 ctx->complete = true;
             }, ctx);
         }, ctx);
     };
 
-    auto ctx = new BucketOpCtx{this, &buckets, nullptr, nullptr, false};
+    auto ctx = new BucketsListOpCtx{this, &buckets, false};
     spdk_thread_send_msg(spdk_reactor_->get_thread(), load_buckets, ctx);
     // TODO harden then we could loop foreva on issue
     while (!ctx->complete) {
@@ -549,64 +542,64 @@ asio::awaitable<std::tuple<size_t, time_t>> SpdkStore::do_metadata_req(std::stri
     co_return std::tuple<size_t, time_t>{0,0};
 }
 
-std::unordered_map<std::string, Multipart> SpdkStore::get_active_mpus() {
-    std::unordered_map<std::string, Multipart> active_mpus = {};
+std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  SpdkStore::get_active_mpus() {
+    std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> mpus = {};
 
-    auto it = index_->index.lower_bound(lobos_mpu_prefix);
-    for (;it != index_->index.end();it++) {
-        if (!it->first.starts_with(lobos_mpu_prefix))
-            break;
-        std::string object_name = it->first.substr(lobos_mpu_prefix.length() + 1);
-        auto pos = object_name.find('_');
+    // auto it = index_->index.lower_bound(lobos_mpu_prefix);
+    // for (;it != index_->index.end();it++) {
+    //     if (!it->first.starts_with(lobos_mpu_prefix))
+    //         break;
+    //     std::string object_name = it->first.substr(lobos_mpu_prefix.length() + 1);
+    //     auto pos = object_name.find('_');
 
-        if (object_name.find("initiated") != std::string_view::npos) {
-            std::string key = object_name.substr(0, pos);
-            object_name.erase(0, pos+1);
-            pos = object_name.find('_');
-            std::string upload_id = object_name.substr(0, pos);
+    //     if (object_name.find("initiated") != std::string_view::npos) {
+    //         std::string key = object_name.substr(0, pos);
+    //         object_name.erase(0, pos+1);
+    //         pos = object_name.find('_');
+    //         std::string upload_id = object_name.substr(0, pos);
 
-            if (!active_mpus.contains(upload_id)) {
-                Multipart mp{
-                    key,
-                    it->second.last_modified,
-                    0,
-                };
-                active_mpus.insert(std::pair<std::string, Multipart>(upload_id, mp));
-            } else {
-                active_mpus[upload_id].init_time = it->second.last_modified;
-            }
-        } else {
-            std::string upload_id = object_name.substr(0, pos);
-            object_name.erase(0, pos+1);
-            pos = object_name.find('_');
-            int part_number = std::stoi(object_name.substr(0, pos));
-            object_name.erase(0, pos+1);
-            std::string key = object_name;
+    //         if (!active_mpus.contains(upload_id)) {
+    //             Multipart mp{
+    //                 key,
+    //                 it->second.last_modified,
+    //                 0,
+    //             };
+    //             active_mpus.insert(std::pair<std::string, Multipart>(upload_id, mp));
+    //         } else {
+    //             active_mpus[upload_id].init_time = it->second.last_modified;
+    //         }
+    //     } else {
+    //         std::string upload_id = object_name.substr(0, pos);
+    //         object_name.erase(0, pos+1);
+    //         pos = object_name.find('_');
+    //         int part_number = std::stoi(object_name.substr(0, pos));
+    //         object_name.erase(0, pos+1);
+    //         std::string key = object_name;
 
-            Part p{
-                it->second.size,
-                "0" //TODO etag
-            };
+    //         Part p{
+    //             it->second.size,
+    //             "0" //TODO etag
+    //         };
 
-            if(!active_mpus.contains(upload_id)) {
-                // create it, we'll update what is needed when we come up to the init object
-                Multipart mp{
-                    key,
-                    0,
-                    0,
-                };
-                active_mpus.insert(std::pair<std::string, Multipart>(upload_id, mp));
-            }
-            active_mpus[upload_id].parts.insert(std::pair<int,Part>(part_number, p));
-            active_mpus[upload_id].current_size += it->second.size;
-        }
-    }
-    return active_mpus;
+    //         if(!active_mpus.contains(upload_id)) {
+    //             // create it, we'll update what is needed when we come up to the init object
+    //             Multipart mp{
+    //                 key,
+    //                 0,
+    //                 0,
+    //             };
+    //             active_mpus.insert(std::pair<std::string, Multipart>(upload_id, mp));
+    //         }
+    //         active_mpus[upload_id].parts.insert(std::pair<int,Part>(part_number, p));
+    //         active_mpus[upload_id].current_size += it->second.size;
+    //     }
+    // }
+    return mpus;
 }
 
-asio::awaitable<int> SpdkStore::do_create_mpu(std::string_view o, std::string uploadId) {
+asio::awaitable<int> SpdkStore::do_create_mpu(std::string& oid, std::string& upload_id) {
     spdk_buffer buff(0);
-    std::string key = lobos_mpu_prefix + "/"  + o.data() + "_" + uploadId + "_initiated";
+    std::string key = lobos_mpu_prefix + "/"  + oid + "_" + upload_id + "_initiated";
 
     co_return co_await do_write(key, buff);
 }
@@ -616,7 +609,7 @@ asio::awaitable<int> SpdkStore::do_create_mpu(std::string_view o, std::string up
 // then write the whole thing because io misaligned with io units
 // are messing up the whole thing
 // Needs to be reworked to be efficient
-asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string upload_id, Multipart mp, std::vector<int> parts) {
+asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string& bucket, std::string& upload_id, Multipart& mp, std::vector<int>& parts) {
     auto buffer = std::make_unique<spdk_buffer>(mp.current_size);
     auto ioctx = std::make_unique<IoCtx>(*buffer);
 
@@ -632,7 +625,7 @@ asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string upload_id, Multipart
     
     size_t offset =0;
     for (auto& part : parts) {
-        auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part) + "_" + mp.key;
+        auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part) + "_" + mp.key + "_" + bucket;
         spdk_buffer part_buffer(mp.parts[part].size);
         rc  = co_await do_read(k, 0, part_buffer);
         if (rc < 0)
@@ -646,23 +639,23 @@ asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string upload_id, Multipart
         co_return rc;
 
     for (const auto& part : mp.parts) {
-        auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key;
+        auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key + "_" + bucket;
         do_delete_async(index_->index[k].blob_id);
     }
 
-    auto init_key = lobos_mpu_prefix + "/" + mp.key + "_" + upload_id + "_initiated";
+    auto init_key = lobos_mpu_prefix + "/" + bucket + "_" + mp.key + "_" + upload_id + "_initiated";
     co_await do_delete(init_key);
 
     co_return 0;
 }
 
-asio::awaitable<int> SpdkStore::do_abort_mpu(std::string upload_id, Multipart mp) {
+asio::awaitable<int> SpdkStore::do_abort_mpu(std::string& oid, std::string& bucket, std::string& upload_id, Multipart& mp) {
     for (const auto& part : mp.parts) {
-        auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key;
+        auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key + "_" + bucket;
         do_delete_async(index_->index[k].blob_id);
     }
 
-    auto init_key = lobos_mpu_prefix + "/" + mp.key + "_" + upload_id + "_initiated";
+    auto init_key = lobos_mpu_prefix + "/" + oid + "_" + upload_id + "_initiated";
     co_await do_delete(init_key);
 
     co_return 0;

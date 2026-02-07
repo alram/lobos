@@ -22,6 +22,7 @@
 #include "../store/store.hpp"
 #include "../store/buffer.hpp"
 #include "../controlplane/loboscontrol_server.hpp"
+#include "s3_bucket.hpp"
 
 
 namespace beast = boost::beast;
@@ -53,7 +54,7 @@ public:
         auto const addr = asio::ip::make_address(conf_.address);
         endpoint = {addr, conf_.port};
 
-        active_mpus_ = store_->get_active_mpus();
+        auto mpus = store_->get_active_mpus();
 
         // Start the control plane
         cp_ = std::make_unique<ControlPlane>(*store_, s3_users_);
@@ -64,7 +65,28 @@ public:
         }
 
         // Load all buckets
-        buckets_ = store_->load_buckets();
+        auto buckets_records = store_->load_buckets();
+        for (const auto& rec : buckets_records) {
+            // key is prefix _ bucket name
+            auto pos = rec.key.find('_');
+            if (pos == std::string::npos) {
+                std::cerr << "ugh this should not happen, returned a bucket idenfier: " << rec.key << std::endl;
+                break;
+            }
+            std::string prefix = rec.key.substr(0, pos);
+            std::string name = rec.key.substr(pos+1);
+
+            auto bucket = std::make_unique<S3Bucket>(
+                *store_,
+                name,
+                rec.owner,
+                prefix,
+                rec.created_at,
+                std::move(mpus[name])
+            );
+            buckets_.emplace(name, std::move(bucket));
+        }
+
     }
     ~S3HttpServer() {
         cp_server_.stop();
@@ -99,8 +121,8 @@ private:
     asio::awaitable<bool> auth_request(const http::request<http::buffer_body>& req);
 
     std::unordered_map<std::string, std::string> s3_users_;
-    std::unordered_map<std::string, Multipart> active_mpus_;
-    std::unordered_map<std::string, Bucket> buckets_;
+    // std::unordered_map<std::string, Multipart> active_mpus_;
+    std::unordered_map<std::string, std::unique_ptr<S3Bucket>> buckets_;
 
     http::message_generator forbidden_res(http::request<http::buffer_body>&& req) {
         http::response<http::string_body> res{http::status::forbidden, req.version()};

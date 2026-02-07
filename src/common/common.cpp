@@ -1,3 +1,5 @@
+#include <random>
+
 #include "common.hpp"
 
 std::string sha256_hex(const std::string& input) {
@@ -118,4 +120,13 @@ std::string to_iso8601(time_t t) {
                   "%Y-%m-%dT%H:%M:%SZ",
                   &tm);
     return buf; 
+}
+
+void random_gen(int len, const std::string allowed_chars, std::string& s) {
+    std::random_device rd;
+    std::mt19937 mt(rd());
+    std::uniform_int_distribution<> distribution(0, allowed_chars.size() - 1);
+
+    for (size_t i = 0; i < len; i++)
+        s += allowed_chars[distribution(mt)];
 }

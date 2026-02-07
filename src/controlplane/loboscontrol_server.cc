@@ -1,5 +1,5 @@
-#include <random>
 #include "loboscontrol_server.hpp"
+#include "../common/common.hpp"
 
 grpc::Status add_error_h(grpc::StatusCode sc) {
     switch (sc) {
@@ -152,15 +152,6 @@ void ControlPlaneServer::stop() {
         server_->Shutdown();
     if (grpc_thread_.joinable())
         grpc_thread_.join();
-}
-
-void random_gen(int len, const std::string allowed_chars, std::string& s) {
-    std::random_device rd;
-    std::mt19937 mt(rd());
-    std::uniform_int_distribution<> distribution(0, allowed_chars.size() - 1);
-
-    for (size_t i = 0; i < len; i++)
-        s += allowed_chars[distribution(mt)];
 }
 
 std::string generate_acces_key() {

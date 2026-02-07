@@ -36,6 +36,7 @@ CXXFLAGS += $(COMMON_FLAGS) $(RELEASE_FLAGS)
 LDFLAGS += -flto -Wl,-O1
 
 SRC = src/lobos.cpp src/s3http/server.cpp src/s3http/s3_op_handler.cpp \
+	  src/s3http/s3_bucket.cpp \
 	  src/common/common.cpp src/index/index.cpp src/store/spdk_store.cpp \
 	  src/store/spdk_stats.cpp src/store/fs_store.cpp
 

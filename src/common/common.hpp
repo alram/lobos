@@ -38,6 +38,8 @@ boost::beast::string_view mime_type(boost::beast::string_view key);
 std::string to_rfc1123(time_t t);
 std::string to_iso8601(time_t t);
 
+void random_gen(int len, const std::string allowed_chars, std::string& s);
+
 struct User {
     std::string name;
     std::string key;
@@ -45,9 +47,18 @@ struct User {
     std::string backend;
 };
 
-// for now but we'll wanna keep stats
-// per bucket
-struct Bucket {
-    std::string prefix;
+struct BucketMetadata {
+    uint64_t owner;
+    time_t created_at;
+}__attribute__((packed));
+
+struct BucketStats {
+    uint64_t size_bytes;
+    uint64_t num_objects;
+};
+
+struct BucketRecord {
+    std::string key;
+    uint64_t owner;
     time_t created_at;
 };

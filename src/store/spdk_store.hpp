@@ -120,16 +120,16 @@ public:
     asio::awaitable<int> do_read(std::string o, uint64_t offset, session_buffer& buffer) override;
     asio::awaitable<bool> do_delete(std::string_view o) override;
     asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string_view o) override;
-    asio::awaitable<void> do_list(std::string& bucket, std::string_view prefix, session_buffer& buffer) override;
+    asio::awaitable<void> do_list(std::string& prefix, session_buffer& buffer) override;
     // Buckets
-    asio::awaitable<Bucket> create_bucket(std::string_view bucket) override;
+    asio::awaitable<bool> create_bucket(std::string& key, BucketMetadata& md) override;
     asio::awaitable<int> delete_bucket(std::string_view bucket) override {};
-    std::unordered_map<std::string, Bucket> load_buckets() override;
+    std::vector<BucketRecord> load_buckets() override;
     // MPU
-    asio::awaitable<int> do_create_mpu(std::string_view o, std::string uploadId) override;
-    std::unordered_map<std::string, Multipart> get_active_mpus() override;
-    asio::awaitable<int> do_assemble_mpu(std::string upload_id, Multipart mp, std::vector<int> parts) override;
-    asio::awaitable<int> do_abort_mpu(std::string upload_id, Multipart mp) override;
+    asio::awaitable<int> do_create_mpu(std::string& oid, std::string& upload_id) override;
+    std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> get_active_mpus() override;
+    asio::awaitable<int> do_assemble_mpu(std::string& bucket, std::string& upload_id, Multipart& mp, std::vector<int>& parts) override;
+    asio::awaitable<int> do_abort_mpu(std::string& oid, std::string& bucket, std::string& upload_id, Multipart& mp)override;
     void shutdown_store() override;
     // Metadata
     int metadata_add_user(User u) override;
@@ -199,10 +199,16 @@ struct UserOpCtx {
     bool complete{false};
 };
 
-struct BucketOpCtx {
+struct BucketCreateOpCtx {
     SpdkStore* store;
-    std::unordered_map<std::string, Bucket>* buckets;
+    std::string key;
+    BucketMetadata md;
     spdk_blob* blob;
-    std::function<void(int)> complete_cb;
-    bool complete{false};
+    std::function<void(int)> complete;
+};
+
+struct BucketsListOpCtx {
+    SpdkStore* store;
+    std::vector<BucketRecord>* buckets;
+    bool complete;
 };

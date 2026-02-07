@@ -11,6 +11,18 @@ namespace beast = boost::beast;
 namespace asio = boost::asio;
 namespace fs = boost::filesystem;
 
+void FsStore::init_store(std::string) {
+    create_dest_dirs_if_not_exist(lobos_mpu_prefix + "/dummy");
+    create_dest_dirs_if_not_exist(lobos_user_prefix + "/dummy");
+
+    if (!boost::filesystem::exists(lobos_bucket_prefix)) {
+        int flags = O_WRONLY | O_CREAT;
+        int fd = open(lobos_bucket_prefix.c_str(), flags, 0644);
+        if (fd < 0)
+            throw std::runtime_error("could not create bucket state object");
+        close(fd);
+    }
+}
 asio::awaitable<int> FsStore::do_write(std::string o, session_buffer& buffer) {
     create_dest_dirs_if_not_exist(o);
     // We always overwrite since it's an object
@@ -51,16 +63,14 @@ asio::awaitable<bool> FsStore::do_delete(std::string_view o) {
     co_return deleted;
 }
 
-asio::awaitable<void> FsStore::do_list(std::string& bucket, std::string_view prefix, session_buffer& buffer) {
-    std::string full_path = bucket + std::string(prefix);
+asio::awaitable<void> FsStore::do_list(std::string& prefix, session_buffer& buffer) {
     // In the prefix, we want the last /
     // which will indicate our actual path
     // then we'll use what's right of the path as
     // an actual prefix
-    auto pos = full_path.find_last_of('/');
-    fs::path path = full_path.substr(0, pos);
-    std::string pre = full_path.substr(pos+1);
-
+    auto pos = prefix.find_last_of('/');
+    fs::path path = prefix.substr(0, pos);
+    std::string pre = prefix.substr(pos+1);
     for (auto& entry : boost::make_iterator_range(fs::directory_iterator(path), {})) {
         if (entry.path().string().find(lobos_state_prefix) != beast::string_view::npos)
             continue;
@@ -87,40 +97,52 @@ asio::awaitable<void> FsStore::do_list(std::string& bucket, std::string_view pre
     co_return;
 };
 
-// FsStore buckets are pretty straightforward, just top level directories
-// in the lobos directory
-asio::awaitable<Bucket> FsStore::create_bucket(std::string_view bucket) {
-    Bucket b;
+asio::awaitable<bool> FsStore::create_bucket(std::string& key, BucketMetadata& md) {
+    // as is its create/replace which should be fine?
+    key = "user." + key;
+    int ret = setxattr(lobos_bucket_prefix.c_str(), key.c_str(), &md, sizeof(md), 0);
+    if (ret == -1)
+        co_return false;
+    // create the dir otherwise ls on empty bucket will fail
+    auto pos = key.find('_');
+    auto dir = key.substr(pos+1) + "/dummy";
+    create_dest_dirs_if_not_exist(dir);
 
-    auto created = fs::create_directory(bucket);
-    if (!created)
-        co_return b;
-    b.prefix = std::string(bucket) + "/";
-    b.created_at = std::time(nullptr);
-
-    co_return b;
+    co_return true;
 };
 
 asio::awaitable<int> FsStore::delete_bucket(std::string_view bucket) {
-    boost::system::error_code ec;
-    fs::remove(bucket, ec);
-    if (ec)
-        co_return ec.value();
+    // boost::system::error_code ec;
+    // fs::remove(bucket, ec);
+    // if (ec)
+    //     co_return ec.value();
     co_return 0;
 };
 
-std::unordered_map<std::string, Bucket> FsStore::load_buckets() {
-    std::unordered_map<std::string, Bucket> buckets;
-    for (auto& entry : boost::make_iterator_range(fs::directory_iterator("."))) {
-        std::string_view path = entry.path().string();
-        path.remove_prefix(2); //get rid of ./
-        if (path.starts_with(lobos_state_prefix))
-            continue;
-        Bucket b;
-        b.prefix = std::string(path) + "/";
-        b.created_at = fs::last_write_time(entry);
-        buckets.insert(std::pair<std::string, Bucket>(path, b));
+std::vector<BucketRecord> FsStore::load_buckets() {
+    std::vector<BucketRecord> buckets{};
+    ssize_t len = listxattr(lobos_bucket_prefix.c_str(), nullptr, 0);
+    std::vector<char> keys(len);
+    len = listxattr(lobos_bucket_prefix.c_str(), keys.data(), len);
+    if (len <= 0)
+        return buckets;
+
+    const char* key = keys.data();
+    const char* pre = ("users." + lobos_bucket_prefix).c_str();
+    while (key < keys.data() + len) {
+        if (strncmp(key, pre, strlen(pre))) {
+            BucketMetadata md;
+            ssize_t ret = getxattr(lobos_bucket_prefix.c_str(), key, &md, sizeof(md));
+            if (ret == sizeof(md))
+                buckets.emplace_back(BucketRecord{
+                    std::string(key + 6), //skips 'users.' since its fs specific
+                    md.owner,
+                    md.created_at
+                });
+        }
+        key += strlen(key) + 1;
     }
+
     return buckets;
 }
 
@@ -136,84 +158,79 @@ asio::awaitable<std::tuple<size_t, time_t>> FsStore::do_metadata_req(std::string
     co_return std::tuple{size, last_modified};
 }
 
-asio::awaitable<int> FsStore::do_create_mpu(std::string_view o, std::string uploadId) {
+asio::awaitable<int> FsStore::do_create_mpu(std::string& oid, std::string& upload_id) {
     // we simply create an empty file stating an MPU for key has been created
-    std::string path = lobos_mpu_prefix + "/" + o.data() + "_" + uploadId + "_initiated";
+    std::string path = lobos_mpu_prefix + "/" + oid + "_" + upload_id + "_initiated";
     int fd = open(path.c_str(), O_CREAT | O_RDONLY, 0600);
     if (fd < 0)
         co_return fd;
     close(fd);
+
     co_return 0;
 }
 
-std::unordered_map<std::string, Multipart> FsStore::get_active_mpus() {
+std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> FsStore::get_active_mpus() {
     fs::path p = lobos_mpu_prefix + "/";
-    std::unordered_map<std::string, Multipart> active_mpus = {};
-
-    // There are two types of files
-    // <key>_<uploadId>_initiated - means a MPU is created
-    // <uploadId>_<partNumber>_<key> - part
+    std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> mpus = {};
+    // In top level we have all the mpu initiation
+    // format: <bucket>_<key>_<upload_id>_initiated
     for (auto& entry : boost::make_iterator_range(fs::directory_iterator(p))) {
         std::string file = entry.path().string().substr(p.string().length());
         if (file.find("initiated") != beast::string_view::npos) {
-            auto pos = file.find('_');
-            std::string key = file.substr(0, pos);
-            file.erase(0, pos+1);
-            pos = file.find('_');
-            std::string upload_id = file.substr(0, pos);
+            std::istringstream ss(file);
+            std::string bucket;
+            std::string upload_id;
+            std::getline(ss, bucket, '_');
 
-            if(!active_mpus.contains(upload_id)) {
-                Multipart mp{
-                    key,
-                    fs::last_write_time(entry),
-                    0,
-                };
-                active_mpus.insert(std::pair<std::string, Multipart>(upload_id, mp));
-            } else {
-                // we just update init time
-                active_mpus[upload_id].init_time = fs::last_write_time(entry);
-            }
-        } else {
-            auto pos = file.find('_');
-            std::string upload_id = file.substr(0, pos);
-            file.erase(0, pos+1);
-            pos = file.find('_');
-            int part_number = std::stoi(file.substr(0, pos));
-            file.erase(0, pos+1);
-            std::string key = file;
-            size_t size = fs::file_size(entry.path());
-            Part p{
-                fs::file_size(entry.path()),
-                "0", // TODO, compute etag
-            };
-            std::cout << "found part - key: " << key << " - uploadid: " << upload_id << "- partnumber: " << part_number << std::endl;
-            if(!active_mpus.contains(upload_id)) {
-                // create it, we'll update what is needed when we come up to the init object
-                Multipart mp{
-                    key,
-                    0,
-                    0,
-                };
-                active_mpus.insert(std::pair<std::string, Multipart>(upload_id, mp));
-            }
-            active_mpus[upload_id].parts.insert(std::pair<int,Part>(part_number, p));
-            active_mpus[upload_id].current_size += size;
+            Multipart mp;
+            std::getline(ss, mp.key, '_');
+            std::getline(ss, upload_id, '_');
+            mp.init_time = fs::last_write_time(entry);
+
+            mpus[bucket].emplace(upload_id, mp);
         }
     }
-    return active_mpus;
+
+    // Now we scan for the parts
+    // format: <upload_id>_<partN>_<key>
+    for (auto& [bucket, m] : mpus) {
+        fs::path part_path = bucket + "/" + lobos_mpu_prefix + "/";
+        if (!fs::exists(part_path))
+            continue;
+
+        for (auto& entry : boost::make_iterator_range(fs::directory_iterator(part_path))) {
+            std::istringstream ss(entry.path().string().substr(part_path.string().length()));
+            std::string upload_id;
+            std::string part;
+            std::string key;
+
+            std::getline(ss, upload_id, '_');
+            std::getline(ss, part, '_');
+            std::getline(ss, key, '_');
+            
+            auto part_size = fs::file_size(entry.path());
+
+            m[upload_id].parts.emplace(std::stoi(part), Part{
+                .size = part_size,
+                .etag = "0000"
+            });
+            m[upload_id].current_size += part_size;
+        }
+    }
+    return mpus;
 }
 
-asio::awaitable<int> FsStore::do_assemble_mpu(std::string upload_id, Multipart mp, std::vector<int> parts) {
+asio::awaitable<int> FsStore::do_assemble_mpu(std::string& bucket, std::string& upload_id, Multipart& mp, std::vector<int>& parts) {
     // all the sanity checks shoulda been done at the server level
     // technically could race tho
-    std::ofstream out(mp.key, std::ios::binary | std::ios::trunc);
+    std::ofstream out(bucket + "/" + mp.key, std::ios::binary | std::ios::trunc);
 
     // TODO failure in the middle of this will leave
     // corrupted objects.
     std::vector<char> chunk(1024*1024); //1MiB chunks
     for (const auto& part : parts) {
         // <uploadId>_<partNumber>_<key>
-        auto src_path = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part) + "_" + mp.key;
+        auto src_path = bucket + "/" + lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part) + "_" + mp.key;
         std::ifstream in(src_path, std::ios::binary);
         if (!in)
             co_return -EIO;
@@ -231,23 +248,23 @@ asio::awaitable<int> FsStore::do_assemble_mpu(std::string upload_id, Multipart m
 
     // Delete part files
     for (const auto& part : parts) {
-        auto src_path = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part) + "_" + mp.key;;
+        auto src_path = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part) + "_" + mp.key + "_" + bucket;
         fs::remove(src_path);
     }
     // remove the initiate
-    fs::remove(lobos_mpu_prefix + "/" + mp.key + "_" + upload_id + "_initiated");
+    fs::remove(lobos_mpu_prefix + "/" + bucket + "_" + mp.key + "_" + upload_id + "_initiated");
 
     co_return 0;
 }
 
-asio::awaitable<int> FsStore::do_abort_mpu(std::string upload_id, Multipart mp) {
+asio::awaitable<int> FsStore::do_abort_mpu(std::string& oid, std::string& bucket, std::string& upload_id, Multipart& mp) {
     // Delete part files
     for (const auto& part : mp.parts) {
-        auto src_path = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key;
+        auto src_path = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key + "_" + bucket;
         fs::remove(src_path);
     }
     // remove the initiate
-    fs::remove(lobos_mpu_prefix + "/" + mp.key + "_" + upload_id + "_initiated");
+    fs::remove(lobos_mpu_prefix + "/" + oid + "_" + upload_id + "_initiated");
     
     co_return 0;
 }

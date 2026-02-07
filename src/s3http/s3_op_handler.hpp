@@ -8,33 +8,30 @@ namespace lobos::s3 {
 
 class S3OpHandler {
 public:
-    S3OpHandler(Store& store,
+    S3OpHandler(std::unordered_map<std::string, std::unique_ptr<S3Bucket>>& buckets,
               http::request<http::buffer_body>&& req,
               std::shared_ptr<session_buffer> buffer,
               std::string key,
-              std::unordered_map<std::string, std::string> query_params,
-              std::unordered_map<std::string, Multipart>& active_mpus,
-              std::unordered_map<std::string, Bucket>& buckets)
-        : store_(store)
+              std::unordered_map<std::string, std::string> query_params)
+        : buckets_(buckets)
         , req_(std::move(req))
         , buffer_(std::move(buffer))
         , key_(std::move(key))
         , query_params_(std::move(query_params))
-        , active_mpus_(active_mpus)
-        , buckets_(buckets)
     {}
 
     asio::awaitable<http::message_generator> handle() {
-        // Only options is a create bucket
+        // Reject query if we do a non PUT query for an bucket that doesn't exist
+        // since this can only be a CreateBucket.
         if (!req_[lobos::s3::bucket].empty() && !buckets_.contains(req_[lobos::s3::bucket]) && req_.method() != http::verb::put)
             co_return no_such_bucket_res();
 
         if (key_.empty())
             is_bucket_op_ = true;
 
-        if (!req_[lobos::s3::bucket].empty() && buckets_.contains(req_[lobos::s3::bucket])) {
-            key_ = buckets_[req_[lobos::s3::bucket]].prefix + key_;
-        }
+        auto it = buckets_.find(req_[lobos::s3::bucket]);
+        if (it != buckets_.end())
+            bucket_ = it->second.get();
 
         switch (req_.method()) {
             case http::verb::head:    co_return co_await handle_head();
@@ -47,14 +44,14 @@ public:
     }
 
 private:
-    Store& store_;
+    std::unordered_map<std::string, std::unique_ptr<S3Bucket>>& buckets_;
     http::request<http::buffer_body> req_;
     std::shared_ptr<session_buffer> buffer_;
     std::string key_;
     std::unordered_map<std::string, std::string> query_params_;
-    std::unordered_map<std::string, Multipart>& active_mpus_;
-    std::unordered_map<std::string, Bucket>& buckets_;
     bool is_bucket_op_{false};
+
+    S3Bucket* bucket_;
 
     // Verb handling func
     asio::awaitable<http::message_generator> handle_head();

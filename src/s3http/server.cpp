@@ -169,7 +169,7 @@ bool S3HttpServer::parse_query_params(std::string_view t, std::unordered_map<std
 }
 void S3HttpServer::sanitize_target_path(beast::string_view& target, beast::string_view bucket, bool is_path_style) {
     // remove /bucketname if we're in path style only
-    if (is_path_style && target.size() > 0 
+    if (is_path_style && !target.empty() 
         && target[0] == '/' && target.substr(1).starts_with(bucket)) {
         target.remove_prefix(bucket.length() + 1);
     }
@@ -180,7 +180,7 @@ void S3HttpServer::sanitize_target_path(beast::string_view& target, beast::strin
         target.remove_suffix(target.length() - pos);
     }
 
-    if (target[0] == '/')
+    if (!target.empty() && target[0] == '/')
         target.remove_prefix(1);
 }
 
@@ -225,13 +225,30 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
     beast::string_view target{req.target()};
     sanitize_target_path(target, bucket_name, is_path_style);
 
-    auto op = S3OpHandler(*store_, 
+    // if the bucket doesn't exist _but_ it's a query that looks
+    // like a create bucket we pre-create it
+    // TODO prevent its listing?
+    if (req.method() == http::verb::put 
+        && !bucket_name.empty() && target.empty()
+        && !buckets_.contains(bucket_name) ) {
+            std::cout << "creating bucket in serveR" << std::endl;
+            std::unordered_map<std::string, Multipart> mpu;
+            auto new_bucket = std::make_unique<S3Bucket>(
+                *store_,
+                bucket_name,
+                0,
+                "",
+                std::time(nullptr),
+                mpu
+            );
+            buckets_.emplace(bucket_name, std::move(new_bucket));
+        }
+
+    auto op = S3OpHandler(buckets_, 
         std::move(req),
         std::move(session_buffer),
         std::move(target),
-        std::move(query_params),
-        active_mpus_,
-        buckets_
+        std::move(query_params)
     );
 
     co_return co_await op.handle();

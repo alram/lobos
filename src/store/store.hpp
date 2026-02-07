@@ -16,18 +16,18 @@ public:
     virtual asio::awaitable<int> do_write(std::string o, session_buffer& buffer) = 0;
     virtual asio::awaitable<int> do_read(std::string o, uint64_t offset, session_buffer& buffer) = 0;
     virtual asio::awaitable<bool> do_delete(std::string_view o) = 0;
-    virtual asio::awaitable<void> do_list(std::string& bucket, std::string_view prefix, session_buffer& buffer) = 0;
+    virtual asio::awaitable<void> do_list(std::string& prefix, session_buffer& buffer) = 0;
     virtual asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string_view o) = 0;
     virtual void shutdown_store() = 0;
     // Bucket ops
-    virtual asio::awaitable<Bucket> create_bucket(std::string_view bucket) = 0;
+    virtual asio::awaitable<bool> create_bucket(std::string& object, BucketMetadata& md) = 0;
     virtual asio::awaitable<int> delete_bucket(std::string_view bucket) = 0;
-    virtual std::unordered_map<std::string, Bucket> load_buckets() = 0;
+    virtual std::vector<BucketRecord> load_buckets() = 0;
     // MPU stuff
-    virtual asio::awaitable<int> do_create_mpu(std::string_view o, std::string upload_id) = 0;
-    virtual std::unordered_map<std::string, Multipart> get_active_mpus() = 0;
-    virtual asio::awaitable<int> do_assemble_mpu(std::string upload_id, Multipart mp, std::vector<int> parts) = 0;
-    virtual asio::awaitable<int> do_abort_mpu(std::string upload_id, Multipart mp) = 0;
+    virtual asio::awaitable<int> do_create_mpu(std::string& oid, std::string& upload_id) = 0;
+    virtual std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  get_active_mpus() = 0;
+    virtual asio::awaitable<int> do_assemble_mpu(std::string& bucket, std::string& upload_id, Multipart& mp, std::vector<int>& parts) = 0;
+    virtual asio::awaitable<int> do_abort_mpu(std::string& oid, std::string& bucket, std::string& upload_id, Multipart& mp) = 0;
     // Control plane stuff
     virtual int metadata_add_user(User u) = 0;
     virtual std::vector<User> metadata_list_users(std::string filter) = 0;
