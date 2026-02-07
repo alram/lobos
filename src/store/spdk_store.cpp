@@ -277,7 +277,6 @@ asio::awaitable<bool> SpdkStore::create_bucket(std::string& key, BucketMetadata&
 }
 
 std::vector<BucketRecord> SpdkStore::load_buckets() {
-
     std::vector<BucketRecord> buckets;
 
     auto load_buckets = [](void *args) {
@@ -301,7 +300,7 @@ std::vector<BucketRecord> SpdkStore::load_buckets() {
                     const void* xattr_v = nullptr;
                     size_t xattr_s = 0;
                     auto rc = spdk_blob_get_xattr_value(blob, xattr.c_str(), &xattr_v, &xattr_s);
-                    if (rc != 0 && (xattr_v && xattr.size() == sizeof(BucketMetadata))) {
+                    if (rc == 0 && (xattr_v && xattr_s >= sizeof(BucketMetadata))) {
                         const BucketMetadata* md = static_cast<const BucketMetadata*>(xattr_v);
                         b.created_at = md->created_at;
                         b.owner = md->owner;
@@ -428,7 +427,7 @@ asio::awaitable<int> SpdkStore::do_write(std::string o, session_buffer& buffer) 
     ioctx->md->size = ioctx->buffer->size();
     ioctx->md->last_modified = std::time(nullptr);
     spdk_blob_id old_blob_id = 0;
-    
+
     auto it = index_->index.find(std::string(o));
     if (it != index_->index.end()) {
         old_blob_id = it->second.blob_id;
@@ -545,62 +544,65 @@ asio::awaitable<std::tuple<size_t, time_t>> SpdkStore::do_metadata_req(std::stri
 std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  SpdkStore::get_active_mpus() {
     std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> mpus = {};
 
-    // auto it = index_->index.lower_bound(lobos_mpu_prefix);
-    // for (;it != index_->index.end();it++) {
-    //     if (!it->first.starts_with(lobos_mpu_prefix))
-    //         break;
-    //     std::string object_name = it->first.substr(lobos_mpu_prefix.length() + 1);
-    //     auto pos = object_name.find('_');
+    for (auto it = index_->index.lower_bound(lobos_mpu_prefix);it != index_->index.end();) {
+        if (!it->first.starts_with(lobos_mpu_prefix))
+            break;
+        // initiated format:
+        // .__lobos__mpu__/<bucket>_<key>_<upload_id>_initiated
+        std::string object = it->first.substr(lobos_mpu_prefix.length() + 1);
+        std::istringstream ss(object);
+        std::string bucket;
+        std::string upload_id;
+        std::getline(ss, bucket, '_');        
 
-    //     if (object_name.find("initiated") != std::string_view::npos) {
-    //         std::string key = object_name.substr(0, pos);
-    //         object_name.erase(0, pos+1);
-    //         pos = object_name.find('_');
-    //         std::string upload_id = object_name.substr(0, pos);
+        // TODO xattr for init time, need support in do_write();
+        Multipart mp;
+        std::getline(ss, mp.key, '_');
+        std::getline(ss, upload_id, '_');
+        mp.init_time = 0;
+        mpus[bucket].emplace(upload_id, mp);
 
-    //         if (!active_mpus.contains(upload_id)) {
-    //             Multipart mp{
-    //                 key,
-    //                 it->second.last_modified,
-    //                 0,
-    //             };
-    //             active_mpus.insert(std::pair<std::string, Multipart>(upload_id, mp));
-    //         } else {
-    //             active_mpus[upload_id].init_time = it->second.last_modified;
-    //         }
-    //     } else {
-    //         std::string upload_id = object_name.substr(0, pos);
-    //         object_name.erase(0, pos+1);
-    //         pos = object_name.find('_');
-    //         int part_number = std::stoi(object_name.substr(0, pos));
-    //         object_name.erase(0, pos+1);
-    //         std::string key = object_name;
+        // erase it so it doesn't show up in list post boot
+        it = index_->index.erase(it);
+    }
 
-    //         Part p{
-    //             it->second.size,
-    //             "0" //TODO etag
-    //         };
+    // Parts are stored in format:
+    // <bucket>/.__lobos__mpu__/<upload_id>_<partN>_<key>
+    for (auto& [bucket, m] : mpus) {
+        std::string pref = bucket + "/" + lobos_mpu_prefix + "/";
+        for (auto it = index_->index.lower_bound(pref); it != index_->index.end();) {
+            if (!it->first.starts_with(pref))
+                break;
+            std::string object_part = it->first.substr(pref.length());
+            std::istringstream ss(object_part);
+            std::string upload_id;
+            std::string part;
+            std::string key;
 
-    //         if(!active_mpus.contains(upload_id)) {
-    //             // create it, we'll update what is needed when we come up to the init object
-    //             Multipart mp{
-    //                 key,
-    //                 0,
-    //                 0,
-    //             };
-    //             active_mpus.insert(std::pair<std::string, Multipart>(upload_id, mp));
-    //         }
-    //         active_mpus[upload_id].parts.insert(std::pair<int,Part>(part_number, p));
-    //         active_mpus[upload_id].current_size += it->second.size;
-    //     }
-    // }
+            std::getline(ss, upload_id, '_');
+            std::getline(ss, part, '_');
+            std::getline(ss, key, '_');
+
+            m[upload_id].parts.emplace(std::stoi(part), Part{
+                .size = 0,
+                .etag = "0000"
+            });
+            // just cause i know ill forget if i
+            // dont put it in comment
+            // m[upload_id].current_size += 0;
+
+            // erase it so it doesn't show up in list post boot
+            it = index_->index.erase(it);
+        }
+    }
+
     return mpus;
 }
 
 asio::awaitable<int> SpdkStore::do_create_mpu(std::string& oid, std::string& upload_id) {
     spdk_buffer buff(0);
     std::string key = lobos_mpu_prefix + "/"  + oid + "_" + upload_id + "_initiated";
-
+    // TODO xattr for creation date
     co_return co_await do_write(key, buff);
 }
 
@@ -613,7 +615,7 @@ asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string& bucket, std::string
     auto buffer = std::make_unique<spdk_buffer>(mp.current_size);
     auto ioctx = std::make_unique<IoCtx>(*buffer);
 
-    ioctx->key = mp.key;
+    ioctx->key = bucket + "/" + mp.key;
     ioctx->md = std::make_unique<BlobMetadata>();
     ioctx->md->size = mp.current_size;
     ioctx->md->last_modified = std::time(nullptr);
@@ -625,7 +627,7 @@ asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string& bucket, std::string
     
     size_t offset =0;
     for (auto& part : parts) {
-        auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part) + "_" + mp.key + "_" + bucket;
+        auto k = bucket + "/" + lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part) + "_" + mp.key;
         spdk_buffer part_buffer(mp.parts[part].size);
         rc  = co_await do_read(k, 0, part_buffer);
         if (rc < 0)
@@ -639,7 +641,7 @@ asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string& bucket, std::string
         co_return rc;
 
     for (const auto& part : mp.parts) {
-        auto k = lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key + "_" + bucket;
+        auto k = bucket + "/" + lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key;
         do_delete_async(index_->index[k].blob_id);
     }
 

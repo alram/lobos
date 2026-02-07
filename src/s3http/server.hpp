@@ -66,6 +66,7 @@ public:
 
         // Load all buckets
         auto buckets_records = store_->load_buckets();
+
         for (const auto& rec : buckets_records) {
             // key is prefix _ bucket name
             auto pos = rec.key.find('_');

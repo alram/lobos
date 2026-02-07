@@ -231,7 +231,6 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
     if (req.method() == http::verb::put 
         && !bucket_name.empty() && target.empty()
         && !buckets_.contains(bucket_name) ) {
-            std::cout << "creating bucket in serveR" << std::endl;
             std::unordered_map<std::string, Multipart> mpu;
             auto new_bucket = std::make_unique<S3Bucket>(
                 *store_,

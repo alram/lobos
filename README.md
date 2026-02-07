@@ -13,7 +13,7 @@ The parsing is pretty naive so things can get broken quick but the following see
  - ListObjectsV2 (no max-keys)
  - HeadObject
  - GetObject (including Range request)
- - PutObject (MPU Broken since multi-bucket support - fix in progress)
+ - PutObject (including MPU)
  - DeleteObject
  - CreateBucket
  - ListBuckets
