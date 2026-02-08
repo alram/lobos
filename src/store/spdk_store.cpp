@@ -626,12 +626,11 @@ std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  Spdk
             std::getline(ss, key, '_');
 
             m[upload_id].parts.emplace(std::stoi(part), Part{
-                .size = 0,
+                .size = it->second.size,
                 .etag = "0000"
             });
-            // just cause i know ill forget if i
-            // dont put it in comment
-            // m[upload_id].current_size += 0;
+
+            m[upload_id].current_size += it->second.size;
         }
     }
 
