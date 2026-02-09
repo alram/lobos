@@ -1,11 +1,10 @@
 CXX = g++
 SPDK_ROOT = $(shell pwd)/src/spdk
-BOOST_DIR = src/boost_1_90_0
 PROTO_DIR = src/controlplane
 PROTOGEN_DIR = $(PROTO_DIR)/protos
 
 # Boost
-BOOST_LIBS = -L$(BOOST_DIR)/stage/lib -lboost_program_options -lboost_filesystem -lboost_url
+BOOST_LIBS = -lboost_program_options -lboost_filesystem -lboost_url
 
 # Spdk
 PKG_CONFIG = PKG_CONFIG_PATH=$(SPDK_ROOT)/build/lib/pkgconfig
@@ -22,7 +21,7 @@ GRPC_LIBS   := $(shell pkg-config --libs grpc++ protobuf)
 PROTOC = /usr/bin/protoc
 GRPC_PLUGIN = /usr/bin/grpc_cpp_plugin
 
-COMMON_FLAGS = -std=c++20 -Wall -Wextra -I$(BOOST_DIR) -I$(PROTO_DIR) $(SPDK_CFLAGS) $(GRPC_CFLAGS) -MMD -MP
+COMMON_FLAGS = -std=c++20 -Wall -Wextra -I$(PROTO_DIR) $(SPDK_CFLAGS) $(GRPC_CFLAGS) -MMD -MP
 DEBUG_FLAGS = -O0 -g -fno-omit-frame-pointer
 RELEASE_FLAGS = \
     -O3 -DNDEBUG \
@@ -72,8 +71,7 @@ $(TARGET): $(OBJ) $(CONTROL_OBJ)
 		-Wl,--no-whole-archive \
 	    -Wl,--end-group \
 		-Wl,--disable-new-dtags \
-		-Wl,-rpath,$(SPDK_ROOT)/dpdk/build/lib \
-		-Wl,-rpath,$(BOOST_DIR)/stage/lib 
+		-Wl,-rpath,$(SPDK_ROOT)/dpdk/build/lib
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@

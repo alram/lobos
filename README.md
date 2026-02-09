@@ -37,15 +37,10 @@ Next area of work in no particular order:
 There's some work needed to make it easier to build... but for now:
 
 ```bash
-$ sudo apt install prometheus-cpp-dev libgrpc-dev libgrpc++-dev protobuf-compiler-grpc libprotobuf-dev
+# Install deps
+$ sudo apt install prometheus-cpp-dev libgrpc-dev libgrpc++-dev protobuf-compiler-grpc libprotobuf-dev libboost-program-options-dev/noble libboost-filesystem-dev/noble libboost-url-dev/noble
 $ git clone https://github.com/alram/lobos.git
 $ cd lobos/src/
-# Build Boost
-$ wget https://archives.boost.io/release/1.90.0/source/boost_1_90_0.tar.bz2
-$ tar -xf boost_1_90_0.tar.bz2
-$ cd boost_1_90_0/
-$ ./boostrap.sh
-$ ./b2 --with-filesystem --with-url --with-program_options
 # Build SPDK
 $ cd <lobos_dir>/src
 $ git clone https://github.com/spdk/spdk --recursive
