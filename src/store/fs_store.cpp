@@ -4,6 +4,7 @@
 #include <boost/asio/awaitable.hpp>
 
 #include <fstream>
+#include <sys/xattr.h>
 
 #include "fs_store.hpp"
 

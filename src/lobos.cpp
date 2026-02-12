@@ -11,7 +11,9 @@
 #include "s3http/server.hpp"
 #include "store/store.hpp"
 #include "store/fs_store.hpp"
+#ifdef ENABLE_SPDK
 #include "store/spdk_store.hpp"
+#endif
 
 namespace po = boost::program_options;
 
@@ -150,10 +152,12 @@ int main(int argc, char **argv) {
         throw std::runtime_error("Error: when auth is disabled, lobos can only use 127.0.0.1 for listen_ip");
 
     std::unique_ptr<Store> store;
+    #ifdef ENABLE_SPDK
     std::unique_ptr<SpdkReactor> spdk_reactor;
-
+    #endif
     std::string backend = vm["lobos.backend"].as<std::string>();
     if (backend == "spdk_blobstore") {
+        #ifdef ENABLE_SPDK
         conf.use_spdk = true;
         SpdkReactorConf conf = {
             vm["spdk_blobstore.log_level"].as<std::string>(),
@@ -168,9 +172,9 @@ int main(int argc, char **argv) {
         };
         store = std::make_unique<SpdkStore>(spdk_reactor.get(), blobs_conf);
         store->init_store(vm["spdk_blobstore.device"].as<std::string>());
-
-        //TODO remove this;
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        #else
+        throw std::runtime_error("SPDK support is not compiled in");
+        #endif
 
     } else if (backend == "filesystem") {
         std::cout << "starting in fs mode" << std::endl;

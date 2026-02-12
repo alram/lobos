@@ -34,24 +34,36 @@ Next area of work in no particular order:
 
 ## Building
 
-There's some work needed to make it easier to build... but for now:
+1. Install dependencies:
 
 ```bash
-# Install deps
-$ sudo apt install prometheus-cpp-dev libgrpc-dev libgrpc++-dev protobuf-compiler-grpc libprotobuf-dev libboost-program-options-dev/noble libboost-filesystem-dev/noble libboost-url-dev/noble
+$ sudo apt install libboost-program-options-dev libboost-filesystem-dev libboost-url-dev libgrpc-dev libgrpc++-dev protobuf-compiler-grpc libprotobuf-dev
+# If you want to use SPDK blobstore backend instead of filesystem you'll also need
+$ sudo apt install prometheus-cpp-dev
+```
+
+2. Clone lobos SPDK and build SPDK:
+```bash
 $ git clone https://github.com/alram/lobos.git
 $ cd lobos/src/
 # Build SPDK
-$ cd <lobos_dir>/src
 $ git clone https://github.com/spdk/spdk --recursive
 # Follow the steps documented here: https://spdk.io/doc/getting_started.html
-$ cd <lobos_dir>
-$ make
-$ ./lobos 
-Error --config is required
-Command Line Options:
-  -h [ --help ]         Show help message
-  -c [ --config ] arg   Path to Lobos config file
+```
+
+3. Build Lobos
+```bash
+$ cmake -B build [-DENABLE_SPDK=OFF] #optionnaly to disable SPDK
+$ cmake --build build
+```
+
+4. Run lobos
+```bash
+$ ./build/lobos -c lobos.cfg
+starting in fs mode
+Starting S3 HTTP server at 127.0.0.1:8080
+Control plane listening on 127.0.0.1:50051
+
 ```
 
 ## Usage

@@ -3,8 +3,9 @@
 #include <span>
 #include <vector>
 #include <string>
+#ifdef ENABLE_SPDK
 #include <spdk/env.h>
-
+#endif
 // TODO there's prolly some nasty bug in spdk_buffer (aka. no confidence)
 
 class session_buffer {
@@ -43,7 +44,7 @@ public:
     }
 };
 
-
+#ifdef ENABLE_SPDK
 class spdk_buffer : public session_buffer {
 public:
     explicit spdk_buffer(size_t size)
@@ -159,3 +160,4 @@ private:
     size_t cap_;
     uint8_t* data_;
 };
+#endif

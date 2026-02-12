@@ -18,7 +18,6 @@
 #include <unordered_set>
 
 #include "../common/common.hpp" 
-#include "../index/index.hpp"
 #include "../store/store.hpp"
 #include "../store/buffer.hpp"
 #include "../controlplane/loboscontrol_server.hpp"
@@ -144,9 +143,11 @@ private:
     }
 
     std::shared_ptr<session_buffer> make_buffer(size_t size) {
+        #ifdef ENABLE_SPDK
         if (conf_.use_spdk)
             return std::make_shared<spdk_buffer>(size);
         else
+        #endif
             return std::make_shared<vector_buffer>(size);
     }
 
