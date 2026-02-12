@@ -12,6 +12,26 @@ namespace beast = boost::beast;
 namespace asio = boost::asio;
 namespace fs = boost::filesystem;
 
+void FsStore::build_index_at_boot() {
+    std::cout << "building index" << std::endl;
+
+    auto buckets = load_buckets();
+    for (const auto& bucket : buckets) {
+        fs::path p = bucket.key;
+        for (auto& entry : boost::make_iterator_range(fs::recursive_directory_iterator(p))) {
+            std::string key = entry.path().string();
+            ObjectBase o = {
+                .key = key,
+                .size = fs::file_size(entry),
+                .last_modified = fs::last_write_time(entry),
+                .list = true,
+            };
+            index_->add_entry(key, o);
+            std::cout << "added entry to index: " << key << std::endl;
+        }
+    }
+}
+
 void FsStore::init_store(std::string) {
     create_dest_dirs_if_not_exist(lobos_mpu_prefix + "/dummy");
     create_dest_dirs_if_not_exist(lobos_user_prefix + "/dummy");
@@ -23,7 +43,10 @@ void FsStore::init_store(std::string) {
             throw std::runtime_error("could not create bucket state object");
         close(fd);
     }
+    if (index_)
+        build_index_at_boot();
 }
+
 asio::awaitable<int> FsStore::do_write(std::string& oid, session_buffer& buffer) {
     create_dest_dirs_if_not_exist(oid);
     // We always overwrite since it's an object
@@ -40,6 +63,16 @@ asio::awaitable<int> FsStore::do_write(std::string& oid, session_buffer& buffer)
     }
     fsync(fd);
     close(fd);
+
+    if (index_) {
+        ObjectBase o = {
+            .key = oid,
+            .size = total_written,
+            .last_modified = std::time(nullptr),
+            .list = true,
+        };
+        index_->add_entry(oid, o);
+    }
 
     co_return total_written;
 
@@ -60,40 +93,61 @@ asio::awaitable<int> FsStore::do_read(std::string& oid, uint64_t offset, session
 }
 
 asio::awaitable<bool> FsStore::do_delete(std::string& oid) {
-    auto deleted = boost::filesystem::remove(oid);
+    auto deleted = boost::filesystem::remove(oid); 
+    if (deleted && index_)
+        index_->rm_entry(oid);
     co_return deleted;
 }
 
 asio::awaitable<void> FsStore::do_list(std::string& prefix, session_buffer& buffer) {
-    // In the prefix, we want the last /
-    // which will indicate our actual path
-    // then we'll use what's right of the path as
-    // an actual prefix
-    auto pos = prefix.find_last_of('/');
-    fs::path path = prefix.substr(0, pos);
-    std::string pre = prefix.substr(pos+1);
-    for (auto& entry : boost::make_iterator_range(fs::directory_iterator(path), {})) {
-        if (entry.path().string().find(lobos_state_prefix) != beast::string_view::npos)
-            continue;
-
-        std::string_view sv = path.string() + "/" + pre;
-        if (!entry.path().string().starts_with(sv))
-            continue;
-
-        std::string s;
-        if (fs::is_directory(entry.path())) {
-            s =  "<CommonPrefixes>"
-                "<Prefix>" + entry.path().filename().string() + '/' + "</Prefix>"
-                "</CommonPrefixes>";
-            
-        } else {
-            s = "<Contents>"
-                "<Key>" + entry.path().filename().string() + "</Key>"
-                "<LastModified>" + to_iso8601(fs::last_write_time(entry)) + "</LastModified>"
-                "<Size>" + std::to_string(fs::file_size(entry.path())) + "</Size>"
-                "</Contents>";
+    if (index_) {
+        auto entries = index_->s3_list_prefix_non_recursive(prefix);
+        for (auto& entry : entries) {
+            // these should already have been filtered out
+            if (!entry.second.list)
+                continue;
+            std::cout << "do_list - key: " << entry.first << std::endl;
+            std::string s;
+            if (entry.first.ends_with('/')) {
+                s =  "<CommonPrefixes>"
+                    "<Prefix>" + entry.first + "</Prefix>"
+                    "</CommonPrefixes>";
+            } else {
+                s ="<Contents>"
+                    "<Key>" + entry.first + "</Key>"
+                    "<LastModified>" + to_iso8601(entry.second.last_modified) + "</LastModified>"
+                    "<Size>" + std::to_string(entry.second.size) + "</Size>"
+                    "</Contents>";
+            }
+            buffer.append(s);
         }
-        buffer.append(s);
+    } else {
+        auto pos = prefix.find_last_of('/');
+        fs::path path = prefix.substr(0, pos);
+        std::string pre = prefix.substr(pos+1);
+        for (auto& entry : boost::make_iterator_range(fs::directory_iterator(path), {})) {
+            if (entry.path().string().find(lobos_state_prefix) != beast::string_view::npos)
+                continue;
+
+            std::string_view sv = path.string() + "/" + pre;
+            if (!entry.path().string().starts_with(sv))
+                continue;
+
+            std::string s;
+            if (fs::is_directory(entry.path())) {
+                s =  "<CommonPrefixes>"
+                    "<Prefix>" + entry.path().filename().string() + '/' + "</Prefix>"
+                    "</CommonPrefixes>";
+                
+            } else {
+                s = "<Contents>"
+                    "<Key>" + entry.path().filename().string() + "</Key>"
+                    "<LastModified>" + to_iso8601(fs::last_write_time(entry)) + "</LastModified>"
+                    "<Size>" + std::to_string(fs::file_size(entry.path())) + "</Size>"
+                    "</Contents>";
+            }
+            buffer.append(s);
+        }
     }
     co_return;
 };
@@ -112,14 +166,21 @@ asio::awaitable<bool> FsStore::create_bucket(std::string& oid, BucketMetadata& m
 };
 
 asio::awaitable<int> FsStore::delete_bucket(std::string& bucket) {
-    boost::system::error_code ec;
-    // We need to check if the bucket is empty. We can rely on fs:remove()
-    // to return an error only because of the hidden mpu dir
-    for (auto& entry : boost::make_iterator_range(fs::directory_iterator(bucket))) {
-        std::string f = entry.path().string().substr(bucket.length() + 1);
-        if (!f.starts_with(lobos_mpu_prefix))
-            co_return -ENOTEMPTY;
+
+    // Check if the bucket is empty
+    if (index_ && index_->bucket_has_keys(bucket, lobos_mpu_prefix)) {
+        co_return -ENOTEMPTY;
+    } else {
+        // We need to check if the bucket is empty. We can rely on fs:remove()
+        // to return an error only because of the hidden mpu dir
+        for (auto& entry : boost::make_iterator_range(fs::directory_iterator(bucket))) {
+            std::string f = entry.path().string().substr(bucket.length() + 1);
+            if (!f.starts_with(lobos_mpu_prefix))
+                co_return -ENOTEMPTY;
+        }
     }
+
+    boost::system::error_code ec;
     fs::remove_all(bucket, ec);
     if (ec)
         co_return ec.value();
@@ -162,15 +223,19 @@ std::vector<BucketRecord> FsStore::load_buckets() {
 }
 
 asio::awaitable<std::tuple<size_t, time_t>> FsStore::do_metadata_req(std::string& oid) {
-    size_t size;
-    time_t last_modified;
-    try {
-        size = fs::file_size(oid);
-        last_modified = fs::last_write_time(oid);
-    } catch (const fs::filesystem_error& e) {
-        size = last_modified = 0;
+    if (index_) {
+        co_return index_->get_object_md(oid);
+    } else {
+        size_t size;
+        time_t last_modified;
+        try {
+            size = fs::file_size(oid);
+            last_modified = fs::last_write_time(oid);
+        } catch (const fs::filesystem_error& e) {
+            size = last_modified = 0;
+        }
+        co_return std::tuple{size, last_modified};
     }
-    co_return std::tuple{size, last_modified};
 }
 
 asio::awaitable<int> FsStore::do_create_mpu(std::string& oid, std::string& upload_id) {
@@ -187,24 +252,42 @@ asio::awaitable<int> FsStore::do_create_mpu(std::string& oid, std::string& uploa
 std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> FsStore::get_active_mpus() {
     fs::path p = lobos_mpu_prefix + "/";
     std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> mpus = {};
+
     // In top level we have all the mpu initiation
     // format: <bucket>_<key>_<upload_id>_initiated
-    for (auto& entry : boost::make_iterator_range(fs::directory_iterator(p))) {
-        std::string file = entry.path().string().substr(p.string().length());
-        if (file.find("initiated") != beast::string_view::npos) {
-            std::istringstream ss(file);
+    if (index_) {
+        for (auto object : index_->list_keys(lobos_mpu_prefix)) {
+            std::istringstream ss(object);
             std::string bucket;
             std::string upload_id;
-            std::getline(ss, bucket, '_');
+            std::getline(ss, bucket, '_');        
 
+            // TODO xattr for init time, need support in do_write();
             Multipart mp;
             std::getline(ss, mp.key, '_');
             std::getline(ss, upload_id, '_');
-            mp.init_time = fs::last_write_time(entry);
-
+            mp.init_time = 0;
             mpus[bucket].emplace(upload_id, mp);
         }
+    } else {
+        for (auto& entry : boost::make_iterator_range(fs::directory_iterator(p))) {
+            std::string file = entry.path().string().substr(p.string().length());
+            if (file.find("initiated") != beast::string_view::npos) {
+                std::istringstream ss(file);
+                std::string bucket;
+                std::string upload_id;
+                std::getline(ss, bucket, '_');
+
+                Multipart mp;
+                std::getline(ss, mp.key, '_');
+                std::getline(ss, upload_id, '_');
+                mp.init_time = fs::last_write_time(entry);
+
+                mpus[bucket].emplace(upload_id, mp);
+            }
+        }
     }
+
 
     // Now we scan for the parts
     // format: <upload_id>_<partN>_<key>
@@ -213,23 +296,49 @@ std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> FsSto
         if (!fs::exists(part_path))
             continue;
 
-        for (auto& entry : boost::make_iterator_range(fs::directory_iterator(part_path))) {
-            std::istringstream ss(entry.path().string().substr(part_path.string().length()));
-            std::string upload_id;
-            std::string part;
-            std::string key;
+        if (index_) {
+            for (auto& [bucket, m] : mpus) {
+                std::string pref = bucket + "/" + lobos_mpu_prefix + "/";
 
-            std::getline(ss, upload_id, '_');
-            std::getline(ss, part, '_');
-            std::getline(ss, key, '_');
-            
-            auto part_size = fs::file_size(entry.path());
+                for (auto object : index_->list_keys(pref)) {
+                    std::istringstream ss(object);
+                    std::string upload_id;
+                    std::string part;
+                    std::string key;
 
-            m[upload_id].parts.emplace(std::stoi(part), Part{
-                .size = part_size,
-                .etag = "0000"
-            });
-            m[upload_id].current_size += part_size;
+                    std::getline(ss, upload_id, '_');
+                    std::getline(ss, part, '_');
+                    std::getline(ss, key, '_');
+
+                    auto size = std::get<0>(index_->get_object_md(object));
+
+                    m[upload_id].parts.emplace(std::stoi(part), Part{
+                        .size = size,
+                        .etag = "0000"
+                    });
+
+                    m[upload_id].current_size += size;  
+                }
+            }
+        } else {
+            for (auto& entry : boost::make_iterator_range(fs::directory_iterator(part_path))) {
+                std::istringstream ss(entry.path().string().substr(part_path.string().length()));
+                std::string upload_id;
+                std::string part;
+                std::string key;
+
+                std::getline(ss, upload_id, '_');
+                std::getline(ss, part, '_');
+                std::getline(ss, key, '_');
+                
+                auto part_size = fs::file_size(entry.path());
+
+                m[upload_id].parts.emplace(std::stoi(part), Part{
+                    .size = part_size,
+                    .etag = "0000"
+                });
+                m[upload_id].current_size += part_size;
+            }
         }
     }
     return mpus;
@@ -238,7 +347,8 @@ std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> FsSto
 asio::awaitable<int> FsStore::do_assemble_mpu(std::string& bucket, std::string& upload_id, Multipart& mp, std::vector<int>& parts) {
     // all the sanity checks shoulda been done at the server level
     // technically could race tho
-    std::ofstream out(bucket + "/" + mp.key, std::ios::binary | std::ios::trunc);
+    std::string key = bucket + "/" + mp.key;
+    std::ofstream out(key, std::ios::binary | std::ios::trunc);
 
     // TODO failure in the middle of this will leave
     // corrupted objects.
@@ -268,6 +378,16 @@ asio::awaitable<int> FsStore::do_assemble_mpu(std::string& bucket, std::string& 
     }
     // remove the initiate
     fs::remove(lobos_mpu_prefix + "/" + bucket + "_" + mp.key + "_" + upload_id + "_initiated");
+
+    if (index_) {
+        ObjectBase o = {
+            .key = key,
+            .size = mp.current_size,
+            .last_modified = std::time(nullptr),
+            .list = true,
+        };
+        index_->add_entry(key, o);
+    }
 
     co_return 0;
 }

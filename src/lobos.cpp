@@ -102,6 +102,7 @@ int main(int argc, char **argv) {
             ("lobos.domain_name", po::value<std::string>()->default_value(""))
             ("lobos.s3_auth_enabled", po::value<bool>()->default_value(true))
             ("filesystem.directory", po::value<std::string>()->default_value(""))
+            ("filesystem.use_index", po::value<bool>()->default_value(false))
             ("spdk_blobstore.device", po::value<std::string>()->default_value(""))
             ("spdk_blobstore.cluster_sz", po::value<uint32_t>()->default_value(131072))
             ("spdk_blobstore.log_level", po::value<std::string>()->default_value(""))
@@ -183,7 +184,7 @@ int main(int argc, char **argv) {
         // Change CWD to lobos_dir
         std::filesystem::current_path(dir);
         // We're in FS mode
-        store = std::make_unique<FsStore>();
+        store = std::make_unique<FsStore>(vm["filesystem.use_index"].as<bool>());
         store->init_store("");
     } else {
         std::cerr << "Error unsupported backend " << backend << std::endl;

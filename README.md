@@ -22,7 +22,7 @@ The parsing is pretty naive so things can get broken quick but the following see
  SPDK support is still very experimental and while the whole project has a lot of shortcuts that needs to be addressed, SPDK has a lot more.
 
 Next area of work in no particular order:
- - New index for SPDK
+ - New index (in progress)
  - Blob pool/dynamic blob handle cache
  - SPDK buffer pool
  - Extend S3 support
