@@ -12,7 +12,7 @@
 #include <boost/asio/awaitable.hpp>
 
 #include "store.hpp"
-#include "../index/index.hpp"
+#include "../index/spdk_index.hpp"
 #include "spdk_stats.hpp"
 
 extern "C" {
@@ -146,7 +146,7 @@ private:
     spdk_blob_store* bs_ = nullptr;
     spdk_io_channel* io_channel_ = nullptr;
     uint64_t io_unit_size_;
-    std::unique_ptr<IndexStore> index_ = nullptr;
+    std::unique_ptr<SpdkIndex> index_ = nullptr;
     spdk_blob_id user_blob_id_;
     spdk_blob_id bucket_blob_id_;
 
@@ -176,7 +176,7 @@ private:
 
     void build_index_at_boot();
     static void iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno);
-    static void get_blob_metadata(spdk_blob* blob, Object* o, const char*& key);
+    static void get_blob_metadata(spdk_blob* blob, SpdkIndexObject* o, const char*& key);
     void do_delete_async(spdk_blob_id blobid);
     void create_or_load_state_objects(std::string lobos_prefix);
     bool metadata_remove_user_keys(std::string& name, std::string key);

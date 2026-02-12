@@ -72,7 +72,7 @@ set(ALL_SRCS ${COMMON_SRCS} ${CONTROL_SRCS})
 
 if(ENABLE_SPDK)
     list(APPEND ALL_SRCS
-        src/index/index.cpp
+        src/index/spdk_index.cpp
         src/store/spdk_store.cpp
         src/store/spdk_stats.cpp
     )

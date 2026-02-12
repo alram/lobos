@@ -111,7 +111,7 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_put() {
         };
         int part_n = std::stoi(query_params_["partNumber"]);
         bucket_->mpus_[query_params_["uploadId"]].parts.insert(std::pair<int,Part>(part_n, p));
-        bucket_->mpus_[query_params_["uploadId"]].current_size += ret;
+        bucket_->mpus_[query_params_["uploadId"]].current_size += buffer_->size();
     }
 
     http::response<http::string_body> res{http::status::ok, req_.version()};

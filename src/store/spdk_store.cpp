@@ -3,6 +3,7 @@
 #include "spdk_awaitable.hpp"
 #include "spdk_store.hpp"
 #include "spdk_blobstoreinit.hpp"
+#include "../index/spdk_index.hpp"
 
 #define BLOB_META_NAME "metadata"
 #define BLOB_META_KEY "key"
@@ -53,7 +54,7 @@ void SpdkStore::iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno) {
         return;
     }
     // Process this blob
-    Object o = {};
+    SpdkIndexObject o = {};
     const char *key = nullptr;
     o.blob_id = spdk_blob_get_id(blb);
     get_blob_metadata(blb, &o, key);
@@ -67,14 +68,14 @@ void SpdkStore::iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno) {
         o.key = key_s;
     }
 
-
     // It's possible we may have orphans due to async deletion failures
     // so we try to handle it.
-    auto it = ctx->index_->index.find(key);
-    if (it != ctx->index_->index.end()) {
-        if (it->second.last_modified < o.last_modified) {
-            ctx->index_->index.erase(key);
-            ctx->do_delete_async(it->second.blob_id);
+    auto index_obj = ctx->index_->get_entry(key_s);
+    if (index_obj) {
+        if (index_obj->last_modified < o.last_modified) {
+            auto blob_id = index_obj->blob_id;
+            ctx->index_->rm_entry(key_s);
+            ctx->do_delete_async(blob_id);
         } else {
             ctx->do_delete_async(o.blob_id);
             skip = true;
@@ -82,7 +83,7 @@ void SpdkStore::iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno) {
     }
 
     if (!skip) {
-        ctx->index_->add_entry(key, o);
+        ctx->index_->add_entry(key_s, o);
         std::cout << "index builder - added index entry: " << key 
                 << " blob: " << o.blob_id << std::endl;
     }
@@ -136,14 +137,14 @@ void SpdkStore::create_or_load_state_objects(std::string lobos_prefix) {
     };
 
     bool create = true;
-    if (index_->index.contains(lobos_prefix)) {
-        spdk_blob_id blob_id = index_->index[lobos_prefix].blob_id;
-        if (lobos_prefix == lobos_user_prefix) {
-            user_blob_id_ = blob_id;
-        } else if (lobos_prefix == lobos_bucket_prefix) {
-            bucket_blob_id_ = blob_id;
-        }
-        index_->index.erase(lobos_prefix);
+
+    auto index_obj = index_->get_entry(lobos_prefix);
+    if (index_obj) {
+        if (lobos_prefix == lobos_user_prefix)
+            user_blob_id_ = index_obj->blob_id;
+        else if (lobos_prefix == lobos_bucket_prefix)
+            bucket_blob_id_ = index_obj->blob_id;
+        index_->rm_entry(lobos_prefix);
         create = false;
     }
 
@@ -204,7 +205,7 @@ void SpdkStore::init_store(std::string devSpec) {
     make_store_ro_if_full_checker();
 
     // start the in-memory index.
-    index_ = std::make_unique<IndexStore>();
+    index_ = std::make_unique<SpdkIndex>();
     build_index_at_boot();
     while (!index_ready) {
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
@@ -217,47 +218,22 @@ void SpdkStore::init_store(std::string devSpec) {
 }
 
 asio::awaitable<void> SpdkStore::do_list(std::string& prefix, session_buffer& buffer) {
-
-    auto pos = prefix.find_last_of('/');
-    std::string base = prefix.substr(0, pos+1);
-    std::string_view key_skip;
-
-    auto it = index_->index.lower_bound(prefix);
-    for(; it!= index_->index.end(); it++) {
-
-        if (!it->first.starts_with(prefix))
-            break;
-        if (it->first.starts_with(base + lobos_mpu_prefix))
+    auto entries = index_->s3_list_prefix_non_recursive(prefix);
+    for (auto& entry : entries) {
+        // these should already have been filtered out
+        if (!entry.second.list)
             continue;
-
+        std::cout << "do_list - key: " << entry.first << std::endl;
         std::string s;
-        std::string key = it->first;
-        key.erase(0, base.length());
-
-        if(!key_skip.empty() && key.starts_with(key_skip))
-            continue;
-
-        // If the key contains a `/` we remove everything after the
-        // first / otherwise it would be a recursive listing
-        // and we store that key so that next run can skip it
-        auto pos = key.find('/');
-        if (pos != std::string::npos) {
-            key.erase(pos+1);
-            key_skip = key;
-        }
-
-        if (key == key_skip) {
+        if (entry.first.ends_with('/')) {
             s =  "<CommonPrefixes>"
-                "<Prefix>" + key + "</Prefix>"
+                "<Prefix>" + entry.first + "</Prefix>"
                 "</CommonPrefixes>";
-            // We store the key to skip it next runs
-            // in order to avoid recursive listing
-            key_skip = key;
         } else {
             s ="<Contents>"
-                "<Key>" + key + "</Key>"
-                "<LastModified>" + to_iso8601(it->second.last_modified) + "</LastModified>"
-                "<Size>" + std::to_string(it->second.size) + "</Size>"
+                "<Key>" + entry.first + "</Key>"
+                "<LastModified>" + to_iso8601(entry.second.last_modified) + "</LastModified>"
+                "<Size>" + std::to_string(entry.second.size) + "</Size>"
                 "</Contents>";
         }
         buffer.append(s);
@@ -292,12 +268,8 @@ asio::awaitable<bool> SpdkStore::create_bucket(std::string& key, BucketMetadata&
 
 asio::awaitable<int> SpdkStore::delete_bucket(std::string& bucket) {
     // Check if the bucket is empty
-    for(auto it = index_->index.lower_bound(bucket); it != index_->index.end(); it++) {
-        if (!it->first.starts_with(bucket + "/"))
-            break;
-        if(!it->first.starts_with(bucket + "/" + lobos_mpu_prefix))
-            co_return -ENOTEMPTY;
-    }
+    if (index_->bucket_has_keys(bucket, lobos_mpu_prefix))
+        co_return -ENOTEMPTY;
 
     // delete the xattr from disk
     co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, bucket](auto complete) {
@@ -453,12 +425,6 @@ asio::awaitable<int> SpdkStore::write_data(IoCtx* ioctx) {
                     // Add entry to index - TODO index stuff is suepr hacky
                     auto pos = ctx->ioctx->key.find('/');
                     auto key_n = ctx->ioctx->key.substr(pos+1);
-                    ctx->store->index_->add_entry(ctx->ioctx->key, {
-                        key_n,
-                        ctx->ioctx->md->size,
-                        ctx->ioctx->md->last_modified,
-                        ctx->ioctx->blob_id,
-                    });
                     ctx->complete(0);
                 }, ctx); // spdk_blob_close
         }, ctx); // spdk_blob_io_write
@@ -474,34 +440,46 @@ asio::awaitable<int> SpdkStore::do_write(std::string& oid, session_buffer& buffe
     ioctx->md->size = ioctx->buffer->size();
     ioctx->md->last_modified = std::time(nullptr);
     spdk_blob_id old_blob_id = 0;
-    auto it = index_->index.find(oid);
-    if (it != index_->index.end()) {
-        old_blob_id = it->second.blob_id;
-        index_->index.erase(it);  // oh boy lets hope the write doesn't fail TODO
-    }
+
+    // if there's already an object with
+    // this key, we set it unlistable
+    index_->unset_listable(oid);
 
     auto rc = co_await create_and_size_blob(ioctx.get());
     if (rc <0)
         co_return rc;
 
     rc = co_await write_data(ioctx.get());
+    if (rc < 0) {
+        index_->set_listable(oid);
+        // TODO more rescue stuff
+        co_return rc;
+    }
 
     if (old_blob_id != 0) {
         do_delete_async(old_blob_id);
     }
 
-    co_return rc;
+    SpdkIndexObject o{};
+    o.key = oid;
+    o.size = ioctx->md->size;
+    o.last_modified = ioctx->md->last_modified;
+    o.list = true;
+    o.blob_id = ioctx->blob_id;
+    index_->add_entry(oid, o);
+
+    co_return 0;
 }
 
 asio::awaitable<int> SpdkStore::do_read(std::string& oid, uint64_t offset, session_buffer& buffer) {
-    auto it = index_->index.find(oid);
-    if (it == index_->index.end()) {
+    
+    auto index_obj = index_->get_entry(oid);
+    if(!index_obj)
         co_return -ENOENT;
-    }
 
     auto ioctx = new IoCtx(buffer);
     ioctx->key = oid;
-    ioctx->blob_id = it->second.blob_id;
+    ioctx->blob_id = index_obj->blob_id;
     ioctx->offset = offset;
 
     co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, ioctx](auto complete) {
@@ -533,21 +511,20 @@ asio::awaitable<int> SpdkStore::do_read(std::string& oid, uint64_t offset, sessi
 }
 
 asio::awaitable<bool> SpdkStore::do_delete(std::string& oid) {
-    auto it = index_->index.find(oid);
-    if (it == index_->index.end()) {
+    auto index_obj = index_->get_entry(oid);
+    if(!index_obj)
         co_return -ENOENT;
-    }
 
     auto ioctx = new IoCtx();
     ioctx->key = oid;
-    ioctx->blob_id = it->second.blob_id;
+    ioctx->blob_id = index_obj->blob_id;
 
     co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, ioctx](auto complete) {
         auto ctx = new BlobOpCtx{this, ioctx, std::move(complete)};
         spdk_bs_delete_blob(ctx->store->bs_, ctx->ioctx->blob_id, [](void *cb_arg, int bserrno) {
             auto ctx = static_cast<BlobOpCtx*>(cb_arg);
             if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
-            ctx->store->index_->index.erase(ctx->ioctx->key);
+            ctx->store->index_->rm_entry(ctx->ioctx->key);
             ctx->complete(0);
             delete ctx;
         }, ctx);
@@ -579,22 +556,13 @@ void SpdkStore::do_delete_async(spdk_blob_id blob_id) {
 }
 
 asio::awaitable<std::tuple<size_t, time_t>> SpdkStore::do_metadata_req(std::string& oid) {
-    auto it = index_->index.find(oid);
-    if (it != index_->index.end()) {
-        co_return std::tuple<size_t, time_t>{it->second.size, it->second.last_modified};
-    }
-    co_return std::tuple<size_t, time_t>{0,0};
+    co_return index_->get_object_md(oid);
 }
 
 std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  SpdkStore::get_active_mpus() {
     std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> mpus = {};
 
-    for (auto it = index_->index.lower_bound(lobos_mpu_prefix);it != index_->index.end(); it++) {
-        if (!it->first.starts_with(lobos_mpu_prefix))
-            break;
-        // initiated format:
-        // .__lobos__mpu__/<bucket>_<key>_<upload_id>_initiated
-        std::string object = it->first.substr(lobos_mpu_prefix.length() + 1);
+    for (auto object : index_->list_keys(lobos_mpu_prefix)) {
         std::istringstream ss(object);
         std::string bucket;
         std::string upload_id;
@@ -612,11 +580,9 @@ std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  Spdk
     // <bucket>/.__lobos__mpu__/<upload_id>_<partN>_<key>
     for (auto& [bucket, m] : mpus) {
         std::string pref = bucket + "/" + lobos_mpu_prefix + "/";
-        for (auto it = index_->index.lower_bound(pref); it != index_->index.end(); it++) {
-            if (!it->first.starts_with(pref))
-                break;
-            std::string object_part = it->first.substr(pref.length());
-            std::istringstream ss(object_part);
+
+        for (auto object : index_->list_keys(pref)) {
+            std::istringstream ss(object);
             std::string upload_id;
             std::string part;
             std::string key;
@@ -625,12 +591,14 @@ std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  Spdk
             std::getline(ss, part, '_');
             std::getline(ss, key, '_');
 
+            auto size = std::get<0>(index_->get_object_md(object));
+
             m[upload_id].parts.emplace(std::stoi(part), Part{
-                .size = it->second.size,
+                .size = size,
                 .etag = "0000"
             });
 
-            m[upload_id].current_size += it->second.size;
+            m[upload_id].current_size += size;  
         }
     }
 
@@ -680,11 +648,19 @@ asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string& bucket, std::string
 
     for (const auto& part : mp.parts) {
         auto k = bucket + "/" + lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key;
-        do_delete_async(index_->index[k].blob_id);
+        do_delete_async(index_->get_blob_id(k));
     }
 
     auto init_key = lobos_mpu_prefix + "/" + bucket + "_" + mp.key + "_" + upload_id + "_initiated";
     co_await do_delete(init_key);
+
+    SpdkIndexObject o{};
+    o.key = ioctx->key;
+    o.size = ioctx->md->size;
+    o.last_modified = ioctx->md->last_modified;
+    o.list = true;
+    o.blob_id = ioctx->blob_id;
+    index_->add_entry(ioctx->key, o);
 
     co_return 0;
 }
@@ -692,7 +668,7 @@ asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string& bucket, std::string
 asio::awaitable<int> SpdkStore::do_abort_mpu(std::string& oid, std::string& bucket, std::string& upload_id, Multipart& mp) {
     for (const auto& part : mp.parts) {
         auto k = bucket + "/" + lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key;
-        do_delete_async(index_->index[k].blob_id);
+        do_delete_async(index_->get_blob_id(k));
     }
 
     auto init_key = lobos_mpu_prefix + "/" + oid + "_" + upload_id + "_initiated";
@@ -701,7 +677,7 @@ asio::awaitable<int> SpdkStore::do_abort_mpu(std::string& oid, std::string& buck
     co_return 0;
 }
 
-void SpdkStore::get_blob_metadata(spdk_blob* blob, Object* o, const char*& key) {
+void SpdkStore::get_blob_metadata(spdk_blob* blob, SpdkIndexObject* o, const char*& key) {
     // This is all the xattr
     const void* xattr_v = nullptr;
     size_t xattr_s = 0;
