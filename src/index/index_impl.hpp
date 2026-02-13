@@ -65,7 +65,7 @@ std::map<std::string, ObjectBase> IndexStore<ObjectType>::s3_list_prefix_non_rec
 
     auto pos = prefix.find_last_of('/');
     std::string base = prefix.substr(0, pos+1);
-    std::string_view key_skip;
+    std::string key_skip;
     auto it = index_.lower_bound(prefix);
     for(; it!= index_.end(); it++) {
         if (!it->first.starts_with(prefix))
@@ -88,7 +88,7 @@ std::map<std::string, ObjectBase> IndexStore<ObjectType>::s3_list_prefix_non_rec
             key.erase(pos+1);
             key_skip = key;
         }
-            
+
         m.emplace(std::make_pair(key, ObjectBase{
             .key = it->second.key,
             .size = it->second.size,

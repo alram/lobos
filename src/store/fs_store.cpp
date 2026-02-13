@@ -106,7 +106,6 @@ asio::awaitable<void> FsStore::do_list(std::string& prefix, session_buffer& buff
             // these should already have been filtered out
             if (!entry.second.list)
                 continue;
-            std::cout << "do_list - key: " << entry.first << std::endl;
             std::string s;
             if (entry.first.ends_with('/')) {
                 s =  "<CommonPrefixes>"
@@ -203,9 +202,9 @@ std::vector<BucketRecord> FsStore::load_buckets() {
         return buckets;
 
     const char* key = keys.data();
-    const char* pre = ("user." + lobos_bucket_prefix).c_str();
+    std::string pre = "user." + lobos_bucket_prefix;
     while (key < keys.data() + len) {
-        if (strncmp(key, pre, strlen(pre))) {
+        if (strncmp(key, pre.c_str(), pre.size())) {
             BucketMetadata md;
             ssize_t ret = getxattr(lobos_bucket_prefix.c_str(), key, &md, sizeof(md));
             if (ret == sizeof(md)) {
@@ -218,7 +217,6 @@ std::vector<BucketRecord> FsStore::load_buckets() {
         }
         key += strlen(key) + 1;
     }
-
     return buckets;
 }
 
