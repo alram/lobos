@@ -92,11 +92,11 @@ asio::awaitable<int> FsStore::do_read(std::string& oid, uint64_t offset, session
     co_return 0;
 }
 
-asio::awaitable<bool> FsStore::do_delete(std::string& oid) {
+asio::awaitable<int> FsStore::do_delete(std::string& oid) {
     auto deleted = boost::filesystem::remove(oid); 
     if (deleted && index_)
         index_->rm_entry(oid);
-    co_return deleted;
+    co_return 0;
 }
 
 asio::awaitable<void> FsStore::do_list(std::string& prefix, session_buffer& buffer) {
@@ -255,7 +255,7 @@ std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> FsSto
     // format: <bucket>_<key>_<upload_id>_initiated
     if (index_) {
         for (auto object : index_->list_keys(lobos_mpu_prefix)) {
-            std::istringstream ss(object);
+            std::istringstream ss(object.substr(lobos_mpu_prefix.length()+1));
             std::string bucket;
             std::string upload_id;
             std::getline(ss, bucket, '_');        
@@ -299,7 +299,7 @@ std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> FsSto
                 std::string pref = bucket + "/" + lobos_mpu_prefix + "/";
 
                 for (auto object : index_->list_keys(pref)) {
-                    std::istringstream ss(object);
+                    std::istringstream ss(object.substr(pref.length()));
                     std::string upload_id;
                     std::string part;
                     std::string key;

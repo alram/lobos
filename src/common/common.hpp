@@ -40,6 +40,17 @@ std::string to_iso8601(time_t t);
 
 void random_gen(int len, const std::string allowed_chars, std::string& s);
 
+template<typename T>
+std::vector<uint8_t> as_bytes(const T& val) {
+    static_assert(std::is_trivially_copyable_v<T>);
+    auto p = reinterpret_cast<const uint8_t*>(&val);
+    return {p, p + sizeof(T)};
+}
+
+inline std::vector<uint8_t> as_bytes(const std::string& val) {
+    return {val.begin(), val.end()};
+}
+
 struct User {
     std::string name;
     std::string key;

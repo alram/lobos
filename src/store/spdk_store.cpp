@@ -5,8 +5,8 @@
 #include "spdk_blobstoreinit.hpp"
 #include "../index/spdk_index.hpp"
 
-#define BLOB_META_NAME "metadata"
-#define BLOB_META_KEY "key"
+#define BLOB_METADATA "metadata"
+#define BLOB_KEY "key"
 
 void SpdkStore::shutdown_store() {
     stats_->shutdown_stats_engine();
@@ -55,26 +55,30 @@ void SpdkStore::iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno) {
     }
     // Process this blob
     SpdkIndexObject o = {};
-    const char *key = nullptr;
     o.blob_id = spdk_blob_get_id(blb);
-    get_blob_metadata(blb, &o, key);
+    std::string key = get_blob_metadata(blb, &o);
 
-    std::string key_s = key;
-    auto pos = key_s.find('/');
     bool skip = false;
+    if (key.empty()) {
+        std::cerr << "Couldn't find key for object: " << o.blob_id << ". This really shouldn't happen" << std::endl;
+        skip = true;
+    }
+
+    // Remove the bucket name
+    auto pos = key.find('/');
     if (pos != std::string::npos) {
-        o.key = key_s.substr(pos+1);
+        o.key = key.substr(pos+1);
     } else {
-        o.key = key_s;
+        o.key = key;
     }
 
     // It's possible we may have orphans due to async deletion failures
     // so we try to handle it.
-    auto index_obj = ctx->index_->get_entry(key_s);
+    auto index_obj = ctx->index_->get_entry(key);
     if (index_obj) {
         if (index_obj->last_modified < o.last_modified) {
             auto blob_id = index_obj->blob_id;
-            ctx->index_->rm_entry(key_s);
+            ctx->index_->rm_entry(key);
             ctx->do_delete_async(blob_id);
         } else {
             ctx->do_delete_async(o.blob_id);
@@ -83,7 +87,7 @@ void SpdkStore::iter_cb(void *cb_arg, struct spdk_blob *blb, int bserrno) {
     }
 
     if (!skip) {
-        ctx->index_->add_entry(key_s, o);
+        ctx->index_->add_entry(key, o);
         std::cout << "index builder - added index entry: " << key 
                 << " blob: " << o.blob_id << std::endl;
     }
@@ -123,7 +127,7 @@ void SpdkStore::create_or_load_state_objects(std::string lobos_prefix) {
             spdk_bs_open_blob(ctx->store->bs_, blob_id, [](void *cb_arg, spdk_blob *blob, int bserrno) {
                 auto ctx = static_cast<StateObjCtx*>(cb_arg);
                 ctx->blob = blob;
-                spdk_blob_set_xattr(blob, BLOB_META_KEY, ctx->xattr_name, strlen(ctx->xattr_name));
+                spdk_blob_set_xattr(blob, BLOB_KEY, ctx->xattr_name, strlen(ctx->xattr_name));
                 spdk_blob_sync_md(blob, [](void *cb_arg, int bserrno){
                     auto ctx = static_cast<StateObjCtx*>(cb_arg);
                     spdk_blob_close(ctx->blob, [](void *cb_arg, int bserrno) {
@@ -183,16 +187,17 @@ void SpdkStore::init_store(std::string devSpec) {
     bs_ = bs;
     bdev_ = bdev;
 
-    auto alloc_channel = [](void *args) {
+    auto get_store_ready = [](void *args) {
         auto ctx = static_cast<SpdkStore*>(args);
         ctx->io_channel_ = spdk_bs_alloc_io_channel(ctx->bs_);
         ctx->io_unit_size_ = spdk_bs_get_io_unit_size(ctx->bs_);
+        ctx->cluster_size_ = spdk_bs_get_cluster_size(ctx->bs_);
     };
 
     auto ctx = static_cast<SpdkStore*>(this);
-    spdk_thread_send_msg(spdk_reactor_->get_thread(), alloc_channel, ctx);
+    spdk_thread_send_msg(spdk_reactor_->get_thread(), get_store_ready, ctx);
     
-    while(!ctx->io_unit_size_ || !ctx->io_channel_) {
+    while(!ctx->io_unit_size_ || !ctx->io_channel_ || !ctx->cluster_size_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
@@ -223,7 +228,6 @@ asio::awaitable<void> SpdkStore::do_list(std::string& prefix, session_buffer& bu
         // these should already have been filtered out
         if (!entry.second.list)
             continue;
-        std::cout << "do_list - key: " << entry.first << std::endl;
         std::string s;
         if (entry.first.ends_with('/')) {
             s =  "<CommonPrefixes>"
@@ -256,7 +260,7 @@ asio::awaitable<bool> SpdkStore::create_bucket(std::string& key, BucketMetadata&
                 spdk_blob_close(ctx->blob, [](void *cb_arg, int bserrno) {
                     auto ctx = static_cast<BucketCRUDOpCtx*>(cb_arg);
                     if (bserrno) { std::cerr << "couldn't close blob" << std::endl; }
-                    ctx->complete(0);
+                    ctx->complete();
                     delete(ctx);
                 }, ctx);
             }, ctx);
@@ -285,7 +289,7 @@ asio::awaitable<int> SpdkStore::delete_bucket(std::string& bucket) {
                 spdk_blob_close(ctx->blob, [](void *cb_arg, int bserrno) {
                     auto ctx = static_cast<BucketCRUDOpCtx*>(cb_arg);
                     if (bserrno) { std::cerr << "couldn't close blob" << std::endl; }
-                    ctx->complete(0);
+                    ctx->complete();
                     delete(ctx);
                 }, ctx);
             }, ctx);
@@ -312,7 +316,7 @@ std::vector<BucketRecord> SpdkStore::load_buckets() {
                 size_t count = spdk_xattr_names_get_count(buckets);
                 for (size_t i = 0; i < count; i++) {
                     std::string xattr = spdk_xattr_names_get_name(buckets, i);
-                    if (xattr == BLOB_META_KEY)
+                    if (xattr == BLOB_KEY)
                         continue;
                     BucketRecord b;
                     b.key = xattr;
@@ -346,62 +350,105 @@ std::vector<BucketRecord> SpdkStore::load_buckets() {
     return buckets;
 }
 
-asio::awaitable<int> SpdkStore::create_and_size_blob(IoCtx* ioctx) {
+asio::awaitable<int> SpdkStore::blob_create(IoCtx* ioctx, std::map<std::string, std::vector<uint8_t>>& xattrs) {
     if(read_only) {
         std::cerr << "Backend is full rejecting write" <<std::endl;
         co_return -ENOSPC;
     }
 
-    co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, ioctx](auto complete) {
-        auto op = new BlobOpCtx{this, ioctx, std::move(complete)};
-        spdk_bs_create_blob(bs_, [](void* cb_arg, spdk_blob_id blob_id, int bserrno) {
-            auto ctx = static_cast<BlobOpCtx*>(cb_arg);
-            if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
-            ctx->ioctx->blob_id = blob_id;
-            spdk_bs_open_blob(ctx->store->bs_, blob_id, [](void *cb_arg, spdk_blob *blob, int bserrno) {
-                auto ctx = static_cast<BlobOpCtx*>(cb_arg);
-                if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
-                ctx->ioctx->blob = blob;
-                auto cluster_size = spdk_bs_get_cluster_size(ctx->store->bs_);
-                uint64_t clusters = ctx->ioctx->buffer->size() / cluster_size;
-                if(ctx->ioctx->buffer->size() % cluster_size != 0) {
-                    clusters++;
-                }
-                // Write xattrs, this is sync. TOOD Check for errs
-                spdk_blob_set_xattr(blob, BLOB_META_NAME, ctx->ioctx->md.get(), sizeof(BlobMetadata));
-                spdk_blob_set_xattr(blob, BLOB_META_KEY, ctx->ioctx->key.c_str(), ctx->ioctx->key.size() + 1);
+    struct BlobCreateCtx {
+        SpdkStore* store;
+        IoCtx* ioctx;
+        std::map<std::string, std::vector<uint8_t>>& xattrs;
+        std::vector<char*> xattr_names;
+        std::function<void(int)> complete;
+    };
 
-                spdk_blob_resize(blob, clusters, [](void *cb_arg, int bserrno) {
-                    auto ctx = static_cast<BlobOpCtx*>(cb_arg);
-                    if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
-                    spdk_blob_sync_md(ctx->ioctx->blob, [](void *cb_arg, int bserrno) {
-                        auto ctx = static_cast<BlobOpCtx*>(cb_arg);
-                        if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
-                        ctx->complete(0);
-                    }, ctx); // sync_md
-                }, ctx); // blob_resize
-            }, ctx); //open_blob
-        }, op); // create_blob
+    auto ctx = std::make_unique<BlobCreateCtx>(this, ioctx, xattrs);
+
+    auto rc = co_await spdk_awaitable<int>(spdk_reactor_->get_thread(), [&ctx](auto complete) {
+        ctx->complete = std::move(complete);
+        struct spdk_blob_opts opts;
+        spdk_blob_opts_init(&opts, sizeof(opts));
+        uint64_t cluster_count = ctx->ioctx->buffer->size() / ctx->store->cluster_size_;
+        if(ctx->ioctx->buffer->size() % ctx->store->cluster_size_ != 0) {
+            cluster_count++;
+        }
+        opts.num_clusters = cluster_count;
+
+        for (auto& [k,v] : ctx->xattrs) {
+            ctx->xattr_names.push_back(const_cast<char*>(k.c_str()));
+        }
+        opts.xattrs.names = ctx->xattr_names.data();
+        opts.xattrs.count = ctx->xattr_names.size();
+        opts.xattrs.ctx = &(ctx->xattrs);
+
+        auto get_xattr_vals = [](void *xattr_ctx, const char *name, const void **value, size_t *value_len) {
+            auto xattrs = static_cast<std::map<std::string, std::vector<uint8_t>>*>(xattr_ctx);
+            auto it = xattrs->find(name);
+            if (it != xattrs->end()) {
+                *value = it->second.data();
+                *value_len = it->second.size();
+            } else {
+                *value = NULL;
+                *value_len = 0;
+            }
+        };
+        opts.xattrs.get_value = get_xattr_vals;
+
+        spdk_bs_create_blob_ext(ctx->store->bs_, &opts, [](void *cb_arg, spdk_blob_id blobid, int bserrno) {
+            auto ctx = static_cast<BlobCreateCtx*>(cb_arg);
+            if (bserrno) {
+                std::cerr << "Error while creating blob: " << bserrno << std::endl;
+            }
+            ctx->ioctx->blob_id = blobid;
+            ctx->complete(bserrno);
+        }, ctx.get()); // spdk_bs_create_blob_ext
     });
 
-    co_return 0;
+    co_return rc;
 }
 
-asio::awaitable<int> SpdkStore::write_data(IoCtx* ioctx) {
-    if (!ioctx->blob_id || !ioctx->blob)
-        co_return -ENOENT;
-    int size = ioctx->buffer->size();
+asio::awaitable<int> SpdkStore::blob_open(IoCtx* ioctx) {
+    if (!ioctx->blob_id)
+        co_return -EBADFD;
 
-    co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, ioctx](auto complete) {
-        auto ctx = new BlobOpCtx{this, ioctx, std::move(complete)};
-        uint64_t write_size = ctx->ioctx->buffer->size() / ctx->store->io_unit_size_;
-        if (ctx->ioctx->buffer->size() % ctx->store->io_unit_size_ != 0) {
-            write_size++;
-        }
+    auto ctx = std::make_unique<BlobOpCtx>(this, ioctx);
+    co_return co_await spdk_awaitable<int>(spdk_reactor_->get_thread(), [&ctx](auto complete) {
+        ctx->complete = std::move(complete);
+        spdk_bs_open_blob(ctx->store->bs_, ctx->ioctx->blob_id, [](void *cb_arg, struct spdk_blob *blb, int bserrno) {
+            auto ctx = static_cast<BlobOpCtx*>(cb_arg);
+            if (bserrno) {
+                std::cerr << "Error while opening blob: " << bserrno << std::endl;
+                ctx->complete(bserrno);
+                return;
+            }
+            ctx->ioctx->blob = blb;
+            ctx->complete(0);
+        }, ctx.get());
+    });
+}
+
+asio::awaitable<int> SpdkStore::blob_write(IoCtx* ioctx) {
+    if (!ioctx->blob)
+        co_return -EBADFD;
+    auto ctx = std::make_unique<BlobOpCtx>(this, ioctx);
+    co_return co_await spdk_awaitable<int>(spdk_reactor_->get_thread(), [&ctx](auto complete) {
+        ctx->complete = std::move(complete);
+
+        // We need to align the offset to blobstore io unit size
         uint64_t offset_units = ctx->ioctx->offset / ctx->store->io_unit_size_;
+        uint64_t length_units = (ctx->ioctx->buffer->size() + ctx->store->io_unit_size_ - 1) / ctx->store->io_unit_size_;
+        // TODO feature: If the total write is smaller than
+        // cluster_size - io_unit; we store what's free
+        // so that we can pack small objects together
+        // in a single cluster.
+
         spdk_blob_io_write(ctx->ioctx->blob, 
-            ctx->store->io_channel_, 
-            ctx->ioctx->buffer->data(), offset_units, write_size,
+            ctx->store->io_channel_,
+            ctx->ioctx->buffer->data(),
+            offset_units,
+            length_units,
             [](void *cb_arg, int bserrno) {
                 auto ctx = static_cast<BlobOpCtx*>(cb_arg);
                 if (bserrno) {
@@ -411,26 +458,71 @@ asio::awaitable<int> SpdkStore::write_data(IoCtx* ioctx) {
                             << " blob: " << (void*)ctx->ioctx->blob
                             << " blob_id: " << ctx->ioctx->blob_id
                             << std::endl;
-                    ctx->complete(bserrno); 
-                    return; 
                 }
-                if (!ctx->ioctx->close) {
-                    ctx->complete(0);
-                    return;
-                }
-                spdk_blob_close(ctx->ioctx->blob, [](void *cb_arg, int bserrno) {
-                    auto ctx = static_cast<BlobOpCtx*>(cb_arg);
-                    if (bserrno)
-                        std::cerr << "non-fatal error closing blob: " << bserrno << std::endl;
-                    // Add entry to index - TODO index stuff is suepr hacky
-                    auto pos = ctx->ioctx->key.find('/');
-                    auto key_n = ctx->ioctx->key.substr(pos+1);
-                    ctx->complete(0);
-                }, ctx); // spdk_blob_close
-        }, ctx); // spdk_blob_io_write
+                ctx->complete(bserrno);
+            }, ctx.get());
     });
+}
 
-    co_return size;
+asio::awaitable<int> SpdkStore::blob_read(IoCtx* ioctx) {
+    if (!ioctx->blob)
+        co_return -EBADF;
+
+    auto ctx = std::make_unique<BlobOpCtx>(this, ioctx);
+    co_return co_await spdk_awaitable<int>(spdk_reactor_->get_thread(), [&ctx](auto complete) {
+        ctx->complete = std::move(complete);
+
+        uint64_t offset_units = ctx->ioctx->offset / ctx->store->io_unit_size_;
+        uint64_t io_units = ctx->ioctx->buffer->size() / ctx->store->io_unit_size_;
+        if (ctx->ioctx->buffer->size() % ctx->store->io_unit_size_ != 0)
+            io_units++;
+
+        spdk_blob_io_read(ctx->ioctx->blob, 
+            ctx->store->io_channel_, 
+            ctx->ioctx->buffer->data(), 
+            offset_units, io_units, 
+            [](void *cb_arg, int bserrno) {
+                auto ctx = static_cast<BlobOpCtx*>(cb_arg);
+                if (bserrno) {
+                    std::cerr << "Error reading blob: " << bserrno << std::endl;
+                }
+                ctx->complete(bserrno);
+        }, ctx.get());
+    });
+}
+
+asio::awaitable<int> SpdkStore::blob_rm(IoCtx* ioctx) {
+    if (!ioctx->blob_id)
+        co_return -EBADF;
+
+    auto ctx = std::make_unique<BlobOpCtx>(this, ioctx);
+    co_return co_await spdk_awaitable<int>(spdk_reactor_->get_thread(), [&ctx](auto complete) {
+        ctx->complete = std::move(complete);
+        spdk_bs_delete_blob(ctx->store->bs_, ctx->ioctx->blob_id, [](void *cb_arg, int bserrno){
+            auto ctx = static_cast<BlobOpCtx*>(cb_arg);
+            if (bserrno) {
+                std::cerr << "Error deleting blob: " << bserrno << std::endl;
+            }
+            ctx->complete(bserrno);
+        }, ctx.get());
+    });
+}
+
+asio::awaitable<int> SpdkStore::blob_close(IoCtx* ioctx) {
+    if (!ioctx->blob)
+        co_return -EBADF;
+
+    auto ctx = std::make_unique<BlobOpCtx>(this, ioctx);
+    co_return co_await spdk_awaitable<int>(spdk_reactor_->get_thread(), [&ctx](auto complete) {
+        ctx->complete = std::move(complete);
+        spdk_blob_close(ctx->ioctx->blob, [](void *cb_arg, int bserrno){
+            auto ctx = static_cast<BlobOpCtx*>(cb_arg);
+            if (bserrno) {
+                std::cerr << "Error closing blob: " << bserrno << std::endl;
+            }
+            ctx->complete(bserrno);
+        }, ctx.get());
+    });
 }
 
 asio::awaitable<int> SpdkStore::do_write(std::string& oid, session_buffer& buffer) {
@@ -439,24 +531,38 @@ asio::awaitable<int> SpdkStore::do_write(std::string& oid, session_buffer& buffe
     ioctx->md = std::make_unique<BlobMetadata>();
     ioctx->md->size = ioctx->buffer->size();
     ioctx->md->last_modified = std::time(nullptr);
-    spdk_blob_id old_blob_id = 0;
 
-    // if there's already an object with
-    // this key, we set it unlistable
-    index_->unset_listable(oid);
+    spdk_blob_id old_blob_id = index_->get_blob_id(oid);
+    if (old_blob_id) {
+        index_->unset_listable(oid);
+    }
 
-    auto rc = co_await create_and_size_blob(ioctx.get());
+    std::map<std::string, std::vector<uint8_t>> xattrs {
+        {BLOB_KEY,      as_bytes(oid)},
+        {BLOB_METADATA, as_bytes(*ioctx->md)},
+    };
+
+    auto rc = co_await blob_create(ioctx.get(), xattrs);
     if (rc <0)
         co_return rc;
 
-    rc = co_await write_data(ioctx.get());
+    rc = co_await blob_open(ioctx.get());
     if (rc < 0) {
-        index_->set_listable(oid);
-        // TODO more rescue stuff
+        do_delete_async(ioctx->blob_id);
         co_return rc;
     }
 
-    if (old_blob_id != 0) {
+    rc = co_await blob_write(ioctx.get());
+    if (rc < 0) {
+        blob_close(ioctx.get());
+        do_delete_async(ioctx->blob_id);
+        index_->set_listable(oid);
+        co_return rc;
+    }
+
+    rc = co_await blob_close(ioctx.get());
+
+    if (old_blob_id) {
         do_delete_async(old_blob_id);
     }
 
@@ -472,64 +578,44 @@ asio::awaitable<int> SpdkStore::do_write(std::string& oid, session_buffer& buffe
 }
 
 asio::awaitable<int> SpdkStore::do_read(std::string& oid, uint64_t offset, session_buffer& buffer) {
-    
     auto index_obj = index_->get_entry(oid);
     if(!index_obj)
         co_return -ENOENT;
 
-    auto ioctx = new IoCtx(buffer);
+    auto ioctx = std::make_unique<IoCtx>(buffer);
     ioctx->key = oid;
     ioctx->blob_id = index_obj->blob_id;
     ioctx->offset = offset;
 
-    co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, ioctx](auto complete) {
-        auto ctx = new BlobOpCtx{this, ioctx, std::move(complete)};
-        spdk_bs_open_blob(ctx->store->bs_, ctx->ioctx->blob_id, [](void *cb_arg, spdk_blob *blob, int bserrno) {
-            auto ctx = static_cast<BlobOpCtx*>(cb_arg);
-            if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
-            ctx->ioctx->blob = blob;
-            uint64_t offset_units = ctx->ioctx->offset / ctx->store->io_unit_size_;
-            uint64_t io_units = ctx->ioctx->buffer->size() / ctx->store->io_unit_size_;
-            if (ctx->ioctx->buffer->size() % ctx->store->io_unit_size_ != 0) {
-                io_units++;
-            }
-            spdk_blob_io_read(blob, ctx->store->io_channel_, ctx->ioctx->buffer->data(), offset_units, io_units, [](void *cb_arg, int bserrno) {
-                auto ctx = static_cast<BlobOpCtx*>(cb_arg);
-                if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
-                spdk_blob_close(ctx->ioctx->blob, [](void *cb_arg, int bserrno) {
-                    auto ctx = static_cast<BlobOpCtx*>(cb_arg);
-                    if (bserrno)
-                        std::cerr << "non-fatal error closing blob: " << bserrno << std::endl;
-                    ctx->complete(0);
-                    delete ctx;
-                }, ctx); // spdk_blob_close
-            }, ctx); //spdk_blob_io_read
-        }, ctx); //spdk_bs_open_blob
-    });
+    auto rc = co_await blob_open(ioctx.get());
+    if (rc < 0)
+        co_return rc;
+
+    rc = co_await blob_read(ioctx.get());
+    if (rc < 0)
+        co_return rc;
+
+    co_await blob_close(ioctx.get());
 
     co_return 0;
 }
 
-asio::awaitable<bool> SpdkStore::do_delete(std::string& oid) {
+asio::awaitable<int> SpdkStore::do_delete(std::string& oid) {
     auto index_obj = index_->get_entry(oid);
     if(!index_obj)
         co_return -ENOENT;
 
-    auto ioctx = new IoCtx();
+     auto ioctx = std::make_unique<IoCtx>();
     ioctx->key = oid;
     ioctx->blob_id = index_obj->blob_id;
 
-    co_await spdk_awaitable(spdk_reactor_->get_thread(), [this, ioctx](auto complete) {
-        auto ctx = new BlobOpCtx{this, ioctx, std::move(complete)};
-        spdk_bs_delete_blob(ctx->store->bs_, ctx->ioctx->blob_id, [](void *cb_arg, int bserrno) {
-            auto ctx = static_cast<BlobOpCtx*>(cb_arg);
-            if (bserrno) { ctx->complete(bserrno); delete ctx; return; }
-            ctx->store->index_->rm_entry(ctx->ioctx->key);
-            ctx->complete(0);
-            delete ctx;
-        }, ctx);
-    });
-    co_return true;
+    auto rc = co_await blob_rm(ioctx.get());
+    if (rc < 0)
+        co_return rc;
+
+    index_->rm_entry(oid);
+
+    co_return 0;
 }
 
 void SpdkStore::do_delete_async(spdk_blob_id blob_id) {
@@ -563,7 +649,7 @@ std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  Spdk
     std::unordered_map<std::string, std::unordered_map<std::string,Multipart>> mpus = {};
 
     for (auto object : index_->list_keys(lobos_mpu_prefix)) {
-        std::istringstream ss(object);
+        std::istringstream ss(object.substr(lobos_mpu_prefix.length()+1));
         std::string bucket;
         std::string upload_id;
         std::getline(ss, bucket, '_');        
@@ -582,7 +668,7 @@ std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  Spdk
         std::string pref = bucket + "/" + lobos_mpu_prefix + "/";
 
         for (auto object : index_->list_keys(pref)) {
-            std::istringstream ss(object);
+            std::istringstream ss(object.substr(pref.length()));
             std::string upload_id;
             std::string part;
             std::string key;
@@ -601,7 +687,6 @@ std::unordered_map<std::string, std::unordered_map<std::string,Multipart>>  Spdk
             m[upload_id].current_size += size;  
         }
     }
-
     return mpus;
 }
 
@@ -626,11 +711,14 @@ asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string& bucket, std::string
     ioctx->md->size = mp.current_size;
     ioctx->md->last_modified = std::time(nullptr);
 
-    // blob is sized to fit all the parts
-    auto rc = co_await create_and_size_blob(ioctx.get());
+    std::map<std::string, std::vector<uint8_t>> xattrs {
+        {BLOB_KEY,      as_bytes(ioctx->key)},
+        {BLOB_METADATA, as_bytes(*ioctx->md)},
+    };
+
+    auto rc = co_await blob_create(ioctx.get(), xattrs);
     if (rc < 0)
         co_return rc;
-    
     size_t offset =0;
     for (auto& part : parts) {
         auto k = bucket + "/" + lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part) + "_" + mp.key;
@@ -639,12 +727,19 @@ asio::awaitable<int> SpdkStore::do_assemble_mpu(std::string& bucket, std::string
         if (rc < 0)
             co_return rc;
         memcpy(buffer->data() + offset, part_buffer.data(), part_buffer.size());
-
         offset += part_buffer.size();
     }
-    rc = co_await write_data(ioctx.get());
-    if (rc <0)
+    rc = co_await blob_open(ioctx.get());
+    if (rc < 0)
         co_return rc;
+
+    rc = co_await blob_write(ioctx.get());
+    if (rc <0) {
+        co_await blob_close(ioctx.get());
+        do_delete_async(ioctx->blob_id);
+        co_return rc;
+    }
+    rc = co_await blob_close(ioctx.get());
 
     for (const auto& part : mp.parts) {
         auto k = bucket + "/" + lobos_mpu_prefix + "/" + upload_id + "_" + std::to_string(part.first) + "_" + mp.key;
@@ -677,22 +772,23 @@ asio::awaitable<int> SpdkStore::do_abort_mpu(std::string& oid, std::string& buck
     co_return 0;
 }
 
-void SpdkStore::get_blob_metadata(spdk_blob* blob, SpdkIndexObject* o, const char*& key) {
-    // This is all the xattr
+std::string SpdkStore::get_blob_metadata(spdk_blob* blob, SpdkIndexObject* o) {
     const void* xattr_v = nullptr;
     size_t xattr_s = 0;
-    auto rc = spdk_blob_get_xattr_value(blob, BLOB_META_NAME, &xattr_v, &xattr_s);
-    if (rc == 0 && (xattr_v && xattr_s >= sizeof(BlobMetadata))) {
-        const BlobMetadata* blob_meta_ptr = static_cast<const BlobMetadata*>(xattr_v);
-        o->last_modified = blob_meta_ptr->last_modified;
-        o->size = blob_meta_ptr->size;
+
+    auto rc = spdk_blob_get_xattr_value(blob, BLOB_METADATA, &xattr_v, &xattr_s);
+    if (rc == 0 && xattr_s == sizeof(BlobMetadata)) {
+        auto md = static_cast<const BlobMetadata*>(xattr_v);
+        o->last_modified = md->last_modified;
+        o->size = md->size;
     }
 
-    // This is the object name xattr
-    rc = spdk_blob_get_xattr_value(blob, BLOB_META_KEY, &xattr_v, &xattr_s);
-    if (rc == 0) {
-        key = static_cast<const char*>(xattr_v);
+    rc = spdk_blob_get_xattr_value(blob, BLOB_KEY, &xattr_v, &xattr_s);
+    if (rc == 0 && xattr_s > 0) {
+        return std::string(static_cast<const char*>(xattr_v), xattr_s);
     }
+
+    return {};
 }
 
 int SpdkStore::metadata_add_user(User u) {
@@ -760,7 +856,7 @@ std::vector<User> SpdkStore::metadata_list_users(std::string filter) {
                     // we get name of the xattr which is going to be
                     // user_key_secret_backend
                     std::string xattr = spdk_xattr_names_get_name(users, i);
-                    if (xattr == BLOB_META_KEY)
+                    if (xattr == BLOB_KEY)
                         continue;
                     User u;
                     std::istringstream ss(xattr);

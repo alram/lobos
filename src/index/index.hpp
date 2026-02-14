@@ -10,7 +10,7 @@ struct ObjectBase {
     std::string key;
     size_t size;
     time_t last_modified;
-    bool list;  // defines wheter or not we should list the object
+    bool list{true};  // defines wheter or not we should list the object
 };
 
 template <typename T>

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <functional>
-#include <optional>
 #include <boost/asio.hpp>
 #include <boost/asio/experimental/channel.hpp>
 #include <spdk/thread.h>
@@ -11,7 +10,7 @@ namespace asio = boost::asio;
 template<typename T>
 asio::awaitable<T> spdk_awaitable(
     spdk_thread* thread,
-    std::function<void(std::function<void(T, int)>)> work)
+    std::function<void(std::function<void(T)>)> work)
 {
     auto exec = co_await asio::this_coro::executor;
 
@@ -20,16 +19,12 @@ asio::awaitable<T> spdk_awaitable(
 
     struct state {
         std::shared_ptr<channel_t> channel;
-        std::function<void(std::function<void(T, int)>)> work;
+        std::function<void(std::function<void(T)>)> work;
 
         static void execute(void* arg) {
             auto s = static_cast<state*>(arg);
-            s->work([s](T result, int err) {
-                boost::system::error_code ec;
-                if (err)
-                    ec = boost::system::error_code(err, boost::system::generic_category());
-                
-                s->channel->async_send(ec, std::move(result), [](auto) {});
+            s->work([s](T result) {
+                s->channel->async_send({}, std::move(result), [](auto) {});
                 delete s;
             });
         }
@@ -38,18 +33,13 @@ asio::awaitable<T> spdk_awaitable(
     auto s = new state{ch, std::move(work)};
     spdk_thread_send_msg(thread, &state::execute, s);
 
-    auto [ec, result] = co_await ch->async_receive(asio::as_tuple(asio::use_awaitable));
-    
-    if (ec)
-        throw std::system_error(ec);
-
-    co_return result;
+    co_return co_await ch->async_receive(asio::use_awaitable);
 }
 
 // Specialization for void
 inline asio::awaitable<void> spdk_awaitable(
     spdk_thread* thread,
-    std::function<void(std::function<void(int)>)> work)
+    std::function<void(std::function<void()>)> work)
 {
     auto exec = co_await asio::this_coro::executor;
 
@@ -58,16 +48,12 @@ inline asio::awaitable<void> spdk_awaitable(
 
     struct state {
         std::shared_ptr<channel_t> channel;
-        std::function<void(std::function<void(int)>)> work;
+        std::function<void(std::function<void()>)> work;
 
         static void execute(void* arg) {
             auto s = static_cast<state*>(arg);
-            s->work([s](int err) {
-                boost::system::error_code ec;
-                if (err)
-                    ec = boost::system::error_code(err, boost::system::generic_category());
-                
-                s->channel->async_send(ec, [](auto) {});
+            s->work([s]() {
+                s->channel->async_send({}, [](auto) {});
                 delete s;
             });
         }
@@ -76,8 +62,5 @@ inline asio::awaitable<void> spdk_awaitable(
     auto s = new state{ch, std::move(work)};
     spdk_thread_send_msg(thread, &state::execute, s);
 
-    auto [ec] = co_await ch->async_receive(asio::as_tuple(asio::use_awaitable));
-    
-    if (ec)
-        throw std::system_error(ec);
+    co_await ch->async_receive(asio::use_awaitable);
 }

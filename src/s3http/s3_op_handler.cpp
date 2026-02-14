@@ -201,8 +201,8 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_delete() {
 
         co_await bucket_->abort_mpu(upload_id);
     } else {
-        auto deleted = co_await bucket_->delete_object(key_);
-        if (!deleted)
+        auto rc = co_await bucket_->delete_object(key_);
+        if (rc)
             co_return key_not_found_res();
     }
     http::response<http::string_body> res{http::status::no_content, req_.version()};

@@ -9,6 +9,7 @@ void SpdkStats::start_stats_engine() {
         spdk_thread_send_msg(spdk_thread_, [](void* arg) {
             auto ctx = static_cast<SpdkStats*>(arg);
             ctx->stats_.total_clusters = spdk_bs_total_data_cluster_count(ctx->bs_);
+            std::cout << "total clusters: " << spdk_bs_total_data_cluster_count(ctx->bs_) << std::endl;
         }, this);
 
         while (run_stats_engine_) {
