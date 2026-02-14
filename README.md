@@ -8,22 +8,26 @@ Lobos supports 2 backends, a filesystem and SPDK's blobstore:
  - SPDK's blobstore
 
 The parsing is pretty naive so things can get broken quick but the following seem to work with `aws s3` cli:
- - ListBuckets
- - HeadBucket
- - ListObjectsV2 (no max-keys)
- - HeadObject
- - GetObject (including Range request)
- - PutObject (including MPU)
- - DeleteObject
+ - AbortMultipartUpload
+ - CompleteMultipartUpload
  - CreateBucket
- - ListBuckets
+ - CreateMultipartUpload
  - DeleteBucket
+ - DeleteObject
+ - GetObject (including Range request)
+ - HeadBucket
+ - HeadObject
+ - ListBuckets
+ - ListMultipartUploads
+ - ListObjectsV2 (no max-keys)
+ - PutObject
+ - UploadPart
 
  SPDK support is still very experimental and while the whole project has a lot of shortcuts that needs to be addressed, SPDK has a lot more.
 
 Next area of work in no particular order:
- - New index (in progress)
- - Blob pool/dynamic blob handle cache
+ - New index
+ - Blobstore object packing for small objects
  - SPDK buffer pool
  - Extend S3 support
     - Checksums
@@ -46,7 +50,7 @@ $ sudo apt install prometheus-cpp-dev
 ```bash
 $ git clone https://github.com/alram/lobos.git
 $ cd lobos/src/
-# Build SPDK
+# Build SPDK if not disabled at compile time
 $ git clone https://github.com/spdk/spdk --recursive
 # Follow the steps documented here: https://spdk.io/doc/getting_started.html
 ```
