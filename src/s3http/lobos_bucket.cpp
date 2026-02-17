@@ -1,6 +1,6 @@
-# include "s3_bucket.hpp"
+# include "lobos_bucket.hpp"
 
-std::string S3Bucket::generate_upload_id() {
+std::string LobosBucket::generate_upload_id() {
     unsigned char buf[16];
     RAND_bytes(buf, 16);
     std::stringstream ss;
@@ -13,7 +13,7 @@ std::string S3Bucket::generate_upload_id() {
 // Buckets are just xattrs of the bucket_object_prefix object
 // key: <prefix>_<bucket_name>
 // val: owner, created_at, (eventually: stats, acl),
-asio::awaitable<bool> S3Bucket::create_bucket() {
+asio::awaitable<bool> LobosBucket::create_bucket() {
     BucketMetadata md = {
         owner_,
         created_at_,
@@ -23,7 +23,7 @@ asio::awaitable<bool> S3Bucket::create_bucket() {
     co_return created;
 }
 
-asio::awaitable<int> S3Bucket::delete_bucket() {
+asio::awaitable<int> LobosBucket::delete_bucket() {
 
     // Abort all incomplete MPU
     std::vector<std::string> mpus_to_abort;
@@ -41,33 +41,33 @@ asio::awaitable<int> S3Bucket::delete_bucket() {
     co_return co_await store_.delete_bucket(name_);
 }
 
-asio::awaitable<std::tuple<size_t, time_t>> S3Bucket::get_object_metadata(std::string& key) {
+asio::awaitable<std::tuple<size_t, time_t>> LobosBucket::get_object_metadata(std::string& key) {
     std::string oid = name_ + "/" + key;
     co_return co_await store_.do_metadata_req(oid);
 }
 
 // TODO MPU logic should happen there?
-asio::awaitable<int> S3Bucket::put_object(std::string& key, std::shared_ptr<session_buffer>& buffer) {
+asio::awaitable<int> LobosBucket::put_object(std::string& key, std::shared_ptr<session_buffer>& buffer) {
     std::string oid = name_ + "/" + key;
     co_return co_await store_.do_write(oid, *buffer);
 }
 
-asio::awaitable<int> S3Bucket::get_object(std::string& key, uint64_t& offset, std::shared_ptr<session_buffer>& buffer) {
+asio::awaitable<int> LobosBucket::get_object(std::string& key, uint64_t& offset, std::shared_ptr<session_buffer>& buffer) {
     std::string oid = name_ + "/" + key;
     co_return co_await store_.do_read(oid, offset, *buffer);
 }
 
-asio::awaitable<int> S3Bucket::delete_object(std::string& key) {
+asio::awaitable<int> LobosBucket::delete_object(std::string& key) {
     std::string oid = name_ + "/" + key;
     co_return co_await store_.do_delete(oid);
 }
 
-asio::awaitable<void> S3Bucket::list_objects(std::string& prefix, std::shared_ptr<session_buffer>& buffer) {
+asio::awaitable<void> LobosBucket::list_objects(std::string& prefix, std::shared_ptr<session_buffer>& buffer) {
     std::string pre = name_ + "/" + prefix;
     co_return co_await store_.do_list(pre, *buffer);
 }
 
-asio::awaitable<std::string> S3Bucket::create_mpu(std::string& key) {
+asio::awaitable<std::string> LobosBucket::create_mpu(std::string& key) {
     std::string oid = name_ + "_" + key;
     auto upload_id = generate_upload_id();
     auto rc = co_await store_.do_create_mpu(oid, upload_id);
@@ -83,7 +83,7 @@ asio::awaitable<std::string> S3Bucket::create_mpu(std::string& key) {
     co_return upload_id;
 }
 
-asio::awaitable<bool> S3Bucket::abort_mpu(std::string& upload_id) {
+asio::awaitable<bool> LobosBucket::abort_mpu(std::string& upload_id) {
     std::string oid = name_ + "_" + mpus_[upload_id].key;
     auto rc = co_await store_.do_abort_mpu(oid, name_, upload_id, mpus_[upload_id]);
     if (rc)
@@ -92,7 +92,7 @@ asio::awaitable<bool> S3Bucket::abort_mpu(std::string& upload_id) {
     co_return true;
 }
 
-asio::awaitable<std::string> S3Bucket::complete_mpu(std::string& upload_id, std::vector<int>& parts) {
+asio::awaitable<std::string> LobosBucket::complete_mpu(std::string& upload_id, std::vector<int>& parts) {
     auto rc = co_await store_.do_assemble_mpu(name_, upload_id, mpus_[upload_id], parts);
     if (rc)
         co_return "";

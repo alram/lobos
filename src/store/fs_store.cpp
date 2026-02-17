@@ -19,6 +19,8 @@ void FsStore::build_index_at_boot() {
     for (const auto& bucket : buckets) {
         fs::path p = bucket.key;
         for (auto& entry : boost::make_iterator_range(fs::recursive_directory_iterator(p))) {
+            if (!fs::is_regular_file(entry))
+                continue;
             std::string key = entry.path().string();
             ObjectBase o = {
                 .key = key,

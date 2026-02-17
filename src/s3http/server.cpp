@@ -232,7 +232,7 @@ asio::awaitable<http::message_generator> S3HttpServer::handle_request(http::requ
         && !bucket_name.empty() && target.empty()
         && !buckets_.contains(bucket_name) ) {
             std::unordered_map<std::string, Multipart> mpu;
-            auto new_bucket = std::make_unique<S3Bucket>(
+            auto new_bucket = std::make_unique<LobosBucket>(
                 *store_,
                 bucket_name,
                 0,

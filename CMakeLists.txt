@@ -58,7 +58,7 @@ set(COMMON_SRCS
     src/lobos.cpp
     src/s3http/server.cpp
     src/s3http/s3_op_handler.cpp
-    src/s3http/s3_bucket.cpp
+    src/s3http/lobos_bucket.cpp
     src/common/common.cpp
     src/store/fs_store.cpp
 )

@@ -21,7 +21,7 @@
 #include "../store/store.hpp"
 #include "../store/buffer.hpp"
 #include "../controlplane/loboscontrol_server.hpp"
-#include "s3_bucket.hpp"
+#include "lobos_bucket.hpp"
 
 
 namespace beast = boost::beast;
@@ -67,7 +67,7 @@ public:
         auto buckets_records = store_->load_buckets();
 
         for (const auto& rec : buckets_records) {
-            auto bucket = std::make_unique<S3Bucket>(
+            auto bucket = std::make_unique<LobosBucket>(
                 *store_,
                 rec.key,
                 rec.owner,

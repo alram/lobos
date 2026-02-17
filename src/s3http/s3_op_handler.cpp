@@ -45,7 +45,7 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_get() {
     }
 
     if (query_params_.contains("uploadId")) {
-        if (!bucket_->mpus_.contains(query_params_["uploadId"]))
+        if (!bucket_->has_mpu(query_params_["uploadId"]))
             co_return bad_request_res("NoSuchUpload", "The specified upload does not exist");
         co_return co_await ok_list_mpu_parts();
     }
@@ -63,7 +63,7 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_put() {
     if (is_bucket_op_ && query_params_.empty()) {
         auto created = co_await bucket_->create_bucket();
         if (!created) {
-            buckets_.erase(bucket_->name_);
+            buckets_.erase(bucket_->name());
             co_return internal_error_res();
         }
         
@@ -88,16 +88,16 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_put() {
         int part_number = std::stoi(query_params_["partNumber"]);
         if (part_number < 1 || part_number > 10000)
             co_return bad_request_res("InvalidRequest", "partNumber must be between 1 and 10000");
-        auto it = bucket_->mpus_.find(query_params_["uploadId"]);;
-        if (it == bucket_->mpus_.end())
+        if (!bucket_->has_mpu(query_params_["uploadId"])) {
             co_return bad_request_res("NoSuchUpload", "The specified upload does not exist.");
-        if (key_.empty() || key_ != bucket_->mpus_[query_params_["uploadId"]].key)
+        }
+        if (key_.empty() || key_ != bucket_->mpu_key(query_params_["uploadId"]))
             co_return bad_request_res("NoSuchUpload", "The specified upload does not exist.");
 
         // TODO min body size for MPU
         // https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
         // We manipulate key to make it a mpu identifiable object in the backend
-        key_ = ".__lobos__mpu__/" + query_params_["uploadId"] + "_" + query_params_["partNumber"] + "_" + key_, + "_" + bucket_->name_;
+        key_ = ".__lobos__mpu__/" + query_params_["uploadId"] + "_" + query_params_["partNumber"] + "_" + key_, + "_" + bucket_->name();
     }
     auto ret = co_await bucket_->put_object(key_, buffer_);
     if (ret < 0)
@@ -110,8 +110,7 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_put() {
             etag,
         };
         int part_n = std::stoi(query_params_["partNumber"]);
-        bucket_->mpus_[query_params_["uploadId"]].parts.insert(std::pair<int,Part>(part_n, p));
-        bucket_->mpus_[query_params_["uploadId"]].current_size += buffer_->size();
+        bucket_->add_mpu_part(query_params_["uploadId"], part_n, p, buffer_->size());
     }
 
     http::response<http::string_body> res{http::status::ok, req_.version()};
@@ -150,9 +149,9 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_post() {
     // complete mpu
     if (query_params_.contains("uploadId")) {
         beast::string_view upload_id = query_params_["uploadId"];
-        if (!bucket_->mpus_.contains(upload_id))
+        if (!bucket_->has_mpu(upload_id))
             co_return bad_request_res("NoSuchUpload", "The specified upload does not exist");
-        if (key_ != bucket_->mpus_[upload_id].key)
+        if (key_ != bucket_->mpu_key(upload_id))
             co_return bad_request_res("NoSuchUpload", "The specified upload does not exist");
 
         co_return co_await complete_mpu();
@@ -194,9 +193,9 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_delete() {
 
     if (query_params_.contains("uploadId")) {
         auto upload_id = query_params_["uploadId"];
-        if (!bucket_->mpus_.contains(upload_id))
+        if (!bucket_->has_mpu(upload_id))
             co_return bad_request_res("NoSuchUpload", "The specified upload does not exist");
-        if (key_ != bucket_->mpus_[upload_id].key)
+        if (key_ != bucket_->mpu_key(upload_id))
             co_return bad_request_res("NoSuchUpload", "The specified upload does not exist");
 
         co_await bucket_->abort_mpu(upload_id);
@@ -233,14 +232,14 @@ asio::awaitable<http::message_generator> S3OpHandler::ok_bucket_ops() {
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
             "<ListMultipartUploadsResult>"
             "<Bucket>" + std::string(req_[lobos::s3::bucket]) + "</Bucket>";
-        for (auto& it : bucket_->mpus_) {
-            s += 
-            "<Upload>"
-            "<Key>" + it.second.key + "</Key>"
-            "<UploadId>" + it.first + "</UploadId>"
-            "<Initiated>" + to_iso8601(it.second.init_time) + "</Initiated>"
-            "</Upload>";
-        }
+            bucket_->for_each_mpu([&](const std::string& id, const Multipart&mpu){
+                s += 
+                "<Upload>"
+                "<Key>" + mpu.key + "</Key>"
+                "<UploadId>" + id + "</UploadId>"
+                "<Initiated>" + to_iso8601(mpu.init_time) + "</Initiated>"
+                "</Upload>";
+            });
         s += "</ListMultipartUploadsResult>";
         res.body() = s;
     } else {
@@ -263,7 +262,7 @@ asio::awaitable<http::message_generator> S3OpHandler::ok_list_all_buckets() {
         s += 
         "<Bucket>"
         "<BucketRegion>lobos1</BucketRegion>"
-        "<CreationDate>" + to_iso8601(b.second->created_at_) + "</CreationDate>"
+        "<CreationDate>" + to_iso8601(b.second->created_at()) + "</CreationDate>"
         "<Name>" + b.first + "</Name>"
         "</Bucket>";
     }
@@ -314,9 +313,9 @@ asio::awaitable<http::message_generator> S3OpHandler::ok_list_mpu_parts() {
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
         "<ListPartsResult>"
         "<Bucket>"+ std::string(req_[lobos::s3::bucket]) +"</Bucket>"
-        "<Key>"+ bucket_->mpus_[upload_id].key + "</Key>"
+        "<Key>"+ bucket_->mpu_key(upload_id) + "</Key>"
         "<UploadId>" + upload_id + "</UploadId>";
-    for (auto& it : bucket_->mpus_[upload_id].parts) {
+    for (auto& it : bucket_->mpu_parts(upload_id)) {
         s += 
             "<Part>"
             "<PartNumber>" + std::to_string(it.first) + "</PartNumber>"
@@ -395,7 +394,7 @@ asio::awaitable<http::message_generator> S3OpHandler::complete_mpu() {
     for (auto& part : pt.get_child("CompleteMultipartUpload")) {
         if (part.first == "Part") {
             auto part_n = part.second.get<int>("PartNumber");
-            if (!bucket_->mpus_[upload_id].parts.contains(part_n))
+            if (!bucket_->mpu_has_part(upload_id, part_n))
                 co_return bad_request_res("InvalidPart",
                     "One or more of the specified parts could not be found. "
                     "The part might not have been uploaded, or the specified entity tag might not have matched the part's entity tag.");
