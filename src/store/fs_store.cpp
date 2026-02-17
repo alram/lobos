@@ -104,24 +104,6 @@ asio::awaitable<int> FsStore::do_delete(std::string& oid) {
 asio::awaitable<std::map<std::string, ObjectBase>> FsStore::do_list(std::string& prefix) {
     if (index_) {
         co_return index_->s3_list_prefix_non_recursive(prefix);
-        // for (auto& entry : entries) {
-        //     // these should already have been filtered out
-        //     if (!entry.second.list)
-        //         continue;
-        //     std::string s;
-        //     if (entry.first.ends_with('/')) {
-        //         s =  "<CommonPrefixes>"
-        //             "<Prefix>" + entry.first + "</Prefix>"
-        //             "</CommonPrefixes>";
-        //     } else {
-        //         s ="<Contents>"
-        //             "<Key>" + entry.first + "</Key>"
-        //             "<LastModified>" + to_iso8601(entry.second.last_modified) + "</LastModified>"
-        //             "<Size>" + std::to_string(entry.second.size) + "</Size>"
-        //             "</Contents>";
-        //     }
-        //     buffer.append(s);
-        // }
     } else {
         std::map<std::string, ObjectBase> objs;
         auto pos = prefix.find_last_of('/');
@@ -139,23 +121,13 @@ asio::awaitable<std::map<std::string, ObjectBase>> FsStore::do_list(std::string&
             std::string e = entry.path().filename().string();
             if (fs::is_directory(entry.path())) {
                 objs.emplace(e, ObjectBase{});
-                // s =  "<CommonPrefixes>"
-                //     "<Prefix>" + entry.path().filename().string() + '/' + "</Prefix>"
-                //     "</CommonPrefixes>";
-                
             } else {
                 objs.emplace(e, ObjectBase{
                     .key = e,
                     .size = fs::file_size(entry.path()),
                     .last_modified = fs::last_write_time(entry),
                 });
-                // s = "<Contents>"
-                //     "<Key>" + entry.path().filename().string() + "</Key>"
-                //     "<LastModified>" + to_iso8601(fs::last_write_time(entry)) + "</LastModified>"
-                //     "<Size>" + std::to_string(fs::file_size(entry.path())) + "</Size>"
-                //     "</Contents>";
             }
-            // buffer.append(s);
         }
         co_return objs;
     }
