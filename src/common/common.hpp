@@ -61,6 +61,7 @@ struct User {
 struct BucketMetadata {
     uint64_t owner;
     time_t created_at;
+    bool is_shadow{false};
 }__attribute__((packed));
 
 struct BucketStats {
@@ -72,4 +73,5 @@ struct BucketRecord {
     std::string key;
     uint64_t owner;
     time_t created_at;
+    bool is_shadow;
 };

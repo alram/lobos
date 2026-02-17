@@ -7,7 +7,7 @@ friend class S3OpHandler;
 public:
     virtual ~S3Bucket() = default;
 
-    virtual asio::awaitable<bool> create_bucket() = 0;
+    virtual asio::awaitable<bool> create_bucket(bool shadowed) = 0;
     virtual asio::awaitable<int> delete_bucket() = 0;
     virtual asio::awaitable<std::tuple<size_t, time_t>> get_object_metadata(std::string& key) = 0;
     virtual asio::awaitable<int> put_object(std::string& key, std::shared_ptr<session_buffer>& buffer) = 0;

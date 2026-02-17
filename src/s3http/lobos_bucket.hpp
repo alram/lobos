@@ -12,7 +12,7 @@ public:
         , mpus_(std::move(mpus))
     {}
 
-    asio::awaitable<bool> create_bucket() override;
+    asio::awaitable<bool> create_bucket(bool shadowed) override;
     asio::awaitable<int> delete_bucket() override;
     asio::awaitable<std::tuple<size_t, time_t>> get_object_metadata(std::string& key) override;
     asio::awaitable<int> put_object(std::string& key, std::shared_ptr<session_buffer>& buffer) override;

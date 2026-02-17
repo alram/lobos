@@ -61,7 +61,7 @@ asio::awaitable<http::message_generator> S3OpHandler::handle_put() {
     // We don't support anything that can
     // be in a body yet so just create it and return
     if (is_bucket_op_ && query_params_.empty()) {
-        auto created = co_await bucket_->create_bucket();
+        auto created = co_await bucket_->create_bucket(false);
         if (!created) {
             buckets_.erase(bucket_->name());
             co_return internal_error_res();

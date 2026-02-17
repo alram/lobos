@@ -101,28 +101,29 @@ asio::awaitable<int> FsStore::do_delete(std::string& oid) {
     co_return 0;
 }
 
-asio::awaitable<void> FsStore::do_list(std::string& prefix, session_buffer& buffer) {
+asio::awaitable<std::map<std::string, ObjectBase>> FsStore::do_list(std::string& prefix) {
     if (index_) {
-        auto entries = index_->s3_list_prefix_non_recursive(prefix);
-        for (auto& entry : entries) {
-            // these should already have been filtered out
-            if (!entry.second.list)
-                continue;
-            std::string s;
-            if (entry.first.ends_with('/')) {
-                s =  "<CommonPrefixes>"
-                    "<Prefix>" + entry.first + "</Prefix>"
-                    "</CommonPrefixes>";
-            } else {
-                s ="<Contents>"
-                    "<Key>" + entry.first + "</Key>"
-                    "<LastModified>" + to_iso8601(entry.second.last_modified) + "</LastModified>"
-                    "<Size>" + std::to_string(entry.second.size) + "</Size>"
-                    "</Contents>";
-            }
-            buffer.append(s);
-        }
+        co_return index_->s3_list_prefix_non_recursive(prefix);
+        // for (auto& entry : entries) {
+        //     // these should already have been filtered out
+        //     if (!entry.second.list)
+        //         continue;
+        //     std::string s;
+        //     if (entry.first.ends_with('/')) {
+        //         s =  "<CommonPrefixes>"
+        //             "<Prefix>" + entry.first + "</Prefix>"
+        //             "</CommonPrefixes>";
+        //     } else {
+        //         s ="<Contents>"
+        //             "<Key>" + entry.first + "</Key>"
+        //             "<LastModified>" + to_iso8601(entry.second.last_modified) + "</LastModified>"
+        //             "<Size>" + std::to_string(entry.second.size) + "</Size>"
+        //             "</Contents>";
+        //     }
+        //     buffer.append(s);
+        // }
     } else {
+        std::map<std::string, ObjectBase> objs;
         auto pos = prefix.find_last_of('/');
         fs::path path = prefix.substr(0, pos);
         std::string pre = prefix.substr(pos+1);
@@ -135,22 +136,29 @@ asio::awaitable<void> FsStore::do_list(std::string& prefix, session_buffer& buff
                 continue;
 
             std::string s;
+            std::string e = entry.path().filename().string();
             if (fs::is_directory(entry.path())) {
-                s =  "<CommonPrefixes>"
-                    "<Prefix>" + entry.path().filename().string() + '/' + "</Prefix>"
-                    "</CommonPrefixes>";
+                objs.emplace(e, ObjectBase{});
+                // s =  "<CommonPrefixes>"
+                //     "<Prefix>" + entry.path().filename().string() + '/' + "</Prefix>"
+                //     "</CommonPrefixes>";
                 
             } else {
-                s = "<Contents>"
-                    "<Key>" + entry.path().filename().string() + "</Key>"
-                    "<LastModified>" + to_iso8601(fs::last_write_time(entry)) + "</LastModified>"
-                    "<Size>" + std::to_string(fs::file_size(entry.path())) + "</Size>"
-                    "</Contents>";
+                objs.emplace(e, ObjectBase{
+                    .key = e,
+                    .size = fs::file_size(entry.path()),
+                    .last_modified = fs::last_write_time(entry),
+                });
+                // s = "<Contents>"
+                //     "<Key>" + entry.path().filename().string() + "</Key>"
+                //     "<LastModified>" + to_iso8601(fs::last_write_time(entry)) + "</LastModified>"
+                //     "<Size>" + std::to_string(fs::file_size(entry.path())) + "</Size>"
+                //     "</Contents>";
             }
-            buffer.append(s);
+            // buffer.append(s);
         }
+        co_return objs;
     }
-    co_return;
 };
 
 asio::awaitable<bool> FsStore::create_bucket(std::string& oid, BucketMetadata& md) {
@@ -213,7 +221,8 @@ std::vector<BucketRecord> FsStore::load_buckets() {
                 buckets.emplace_back(BucketRecord{
                     std::string(key + 5), //skips 'user.' since its fs specific
                     md.owner,
-                    md.created_at
+                    md.created_at,
+                    md.is_shadow,
                 });
             }
         }

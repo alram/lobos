@@ -114,7 +114,7 @@ public:
     asio::awaitable<int> do_read(std::string& objoidect, uint64_t offset, session_buffer& buffer) override;
     asio::awaitable<int> do_delete(std::string& oid) override;
     asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string& oid) override;
-    asio::awaitable<void> do_list(std::string& prefix, session_buffer& buffer) override;
+    asio::awaitable<std::map<std::string, ObjectBase>> do_list(std::string& prefix) override;
 
     // Blob operations
     asio::awaitable<int> blob_create(IoCtx* ioctx, std::map<std::string, std::vector<uint8_t>>& xattrs);

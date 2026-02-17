@@ -222,27 +222,8 @@ void SpdkStore::init_store(std::string devSpec) {
     create_or_load_state_objects(lobos_bucket_prefix);
 }
 
-asio::awaitable<void> SpdkStore::do_list(std::string& prefix, session_buffer& buffer) {
-    auto entries = index_->s3_list_prefix_non_recursive(prefix);
-    for (auto& entry : entries) {
-        // these should already have been filtered out
-        if (!entry.second.list)
-            continue;
-        std::string s;
-        if (entry.first.ends_with('/')) {
-            s =  "<CommonPrefixes>"
-                "<Prefix>" + entry.first + "</Prefix>"
-                "</CommonPrefixes>";
-        } else {
-            s ="<Contents>"
-                "<Key>" + entry.first + "</Key>"
-                "<LastModified>" + to_iso8601(entry.second.last_modified) + "</LastModified>"
-                "<Size>" + std::to_string(entry.second.size) + "</Size>"
-                "</Contents>";
-        }
-        buffer.append(s);
-    }
-    co_return;
+asio::awaitable<std::map<std::string, ObjectBase>> SpdkStore::do_list(std::string& prefix) {
+    co_return index_->s3_list_prefix_non_recursive(prefix);
 }
 
 asio::awaitable<bool> SpdkStore::create_bucket(std::string& key, BucketMetadata& md) {
@@ -327,6 +308,7 @@ std::vector<BucketRecord> SpdkStore::load_buckets() {
                         const BucketMetadata* md = static_cast<const BucketMetadata*>(xattr_v);
                         b.created_at = md->created_at;
                         b.owner = md->owner;
+                        b.is_shadow = md->is_shadow;
                         ctx->buckets->emplace_back(b);
                     }
                 }

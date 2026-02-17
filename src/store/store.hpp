@@ -6,6 +6,7 @@
 
 #include "buffer.hpp"
 #include "../common/common.hpp" 
+#include "../index/index.hpp"
 
 namespace asio = boost::asio;
 
@@ -16,7 +17,7 @@ public:
     virtual asio::awaitable<int> do_write(std::string& object, session_buffer& buffer) = 0;
     virtual asio::awaitable<int> do_read(std::string& object, uint64_t offset, session_buffer& buffer) = 0;
     virtual asio::awaitable<int> do_delete(std::string& object) = 0;
-    virtual asio::awaitable<void> do_list(std::string& prefix, session_buffer& buffer) = 0;
+    virtual asio::awaitable<std::map<std::string, ObjectBase>> do_list(std::string& prefix) = 0;
     virtual asio::awaitable<std::tuple<size_t, time_t>> do_metadata_req(std::string& object) = 0;
     virtual void shutdown_store() = 0;
     // Bucket ops

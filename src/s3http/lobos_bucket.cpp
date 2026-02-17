@@ -1,4 +1,4 @@
-# include "lobos_bucket.hpp"
+#include "lobos_bucket.hpp"
 
 std::string LobosBucket::generate_upload_id() {
     unsigned char buf[16];
@@ -13,10 +13,11 @@ std::string LobosBucket::generate_upload_id() {
 // Buckets are just xattrs of the bucket_object_prefix object
 // key: <prefix>_<bucket_name>
 // val: owner, created_at, (eventually: stats, acl),
-asio::awaitable<bool> LobosBucket::create_bucket() {
+asio::awaitable<bool> LobosBucket::create_bucket(bool shadowed) {
     BucketMetadata md = {
         owner_,
         created_at_,
+        shadowed,
     };
 
     auto created = co_await store_.create_bucket(name_, md);
@@ -64,7 +65,26 @@ asio::awaitable<int> LobosBucket::delete_object(std::string& key) {
 
 asio::awaitable<void> LobosBucket::list_objects(std::string& prefix, std::shared_ptr<session_buffer>& buffer) {
     std::string pre = name_ + "/" + prefix;
-    co_return co_await store_.do_list(pre, *buffer);
+    // co_return co_await store_.do_list(pre, *buffer);
+    auto objs = co_await store_.do_list(pre);
+    for (auto& obj : objs) {
+        // these should already have been filtered out
+        if (!obj.second.list)
+            continue;
+        std::string s;
+        if (obj.first.ends_with('/')) {
+            s =  "<CommonPrefixes>"
+                "<Prefix>" + obj.first + "</Prefix>"
+                "</CommonPrefixes>";
+        } else {
+            s ="<Contents>"
+                "<Key>" + obj.first + "</Key>"
+                "<LastModified>" + to_iso8601(obj.second.last_modified) + "</LastModified>"
+                "<Size>" + std::to_string(obj.second.size) + "</Size>"
+                "</Contents>";
+        }
+        buffer->append(s);
+    }
 }
 
 asio::awaitable<std::string> LobosBucket::create_mpu(std::string& key) {
