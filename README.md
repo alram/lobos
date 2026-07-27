@@ -1,6 +1,6 @@
 # LOBOS
 
-**NOTE** This is a learning experiment to get familiar with C++ with no certain future maintenance or improvements. It's currently under active development.
+**NOTE** This is a learning experiment to get familiar with C++ with no certain future maintenance or improvements. It's **abandoned**.
 
 Lobos (local objectstore) allows a user to quickly deploy a local object store. Lobos can bind to `127.0.0.1` with noauth or any local IP when auth is enabled (see lobos.cfg in the repo for more info).
 Lobos supports 2 backends, a filesystem and SPDK's blobstore:
